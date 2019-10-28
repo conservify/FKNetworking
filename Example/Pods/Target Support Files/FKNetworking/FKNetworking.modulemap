@@ -1,0 +1,6 @@
+framework module FKNetworking {
+  umbrella header "FKNetworking-umbrella.h"
+
+  export *
+  module * { export * }
+}

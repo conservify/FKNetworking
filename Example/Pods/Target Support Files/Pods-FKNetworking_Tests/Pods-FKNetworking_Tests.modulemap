@@ -1,0 +1,6 @@
+framework module Pods_FKNetworking_Tests {
+  umbrella header "Pods-FKNetworking_Tests-umbrella.h"
+
+  export *
+  module * { export * }
+}
