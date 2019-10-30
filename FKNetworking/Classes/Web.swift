@@ -13,6 +13,8 @@ open class WebTransfer : NSObject {
     @objc public var url: String? = nil
     @objc public var path: String? = nil
     @objc public var body: String? = nil
+    @objc public var base64DecodeRequestBody: Bool = false
+    @objc public var base64EncodeResponseBody: Bool = false
     @objc public var contentType: String? = nil
     @objc public var headers: [String: String] = [String:String]()
     
@@ -45,7 +47,18 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
         
         NSLog("[%@] http %@", id, info.url!)
         
-        let task = URLSession.shared.dataTask(with: url) { (data, response, error) in
+        var req = URLRequest(url: url)
+        
+        if info.body != nil {
+            if info.base64DecodeRequestBody {
+                req.httpBody = Data(base64Encoded: info.body!)
+            }
+            else {
+                req.httpBody = info.body!.data(using: .utf8)
+            }
+        }
+        
+        let task = URLSession.shared.dataTask(with: req) { (data, response, error) in
             NSLog("[%@] completed", id)
 
             if error != nil {
@@ -56,16 +69,26 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
             else {
                 if let httpResponse = response as? HTTPURLResponse {
                     guard let data = data else { return }
+
+                    NSLog("data: %@", data.debugDescription)
                     
-                    let body = String(data: data, encoding: .utf8)
-                    
-                    NSLog("body: %@", body!)
+                    var body: String?
+                    if info.base64EncodeResponseBody {
+                        body = String(data: data.base64EncodedData(), encoding: .utf8)
+                        NSLog("encoded body: %@", body!)
+                    }
+                    else {
+                        body = String(data: data, encoding: .utf8)
+                        NSLog("string body: %@", body!)
+                    }
                     
                     let contentType = httpResponse.allHeaderFields["Content-Type"] as? String
                     let headers = httpResponse.headersAsStrings()
                     
                     self.downloadListener.onStarted(taskId: id, headers: headers)
-                    self.downloadListener.onComplete(taskId: id, headers: headers, contentType: contentType, body: body!, statusCode: httpResponse.statusCode)
+                    self.downloadListener.onComplete(taskId: id, headers: headers,
+                                                     contentType: contentType, body: body,
+                                                     statusCode: httpResponse.statusCode)
                 }
                 else {
                     NSLog("[%@] unexpected response %@", id, response.debugDescription)
@@ -93,12 +116,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
     }
     
     @objc
-    public func json(info: WebTransfer) -> String {
-        return basic(info: info)
-    }
-    
-    @objc
-    public func binary(info: WebTransfer) -> String {
+    public func simple(info: WebTransfer) -> String {
         return basic(info: info)
     }
     
