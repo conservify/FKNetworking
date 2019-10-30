@@ -21,7 +21,7 @@ open class Networking : NSObject {
         self.networkingListener = networkingListener
         self.serviceDiscovery = ServiceDiscovery(networkingListener: networkingListener)
         self.web = Web(uploadListener: uploadListener, downloadListener: downloadListener)
-        self.wifi = WifiManager()
+        self.wifi = WifiManager(networkingListener: networkingListener)
         NSLog("Networking::new")
         super.init()
     }

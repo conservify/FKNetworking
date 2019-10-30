@@ -47,8 +47,12 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
         
         NSLog("[%@] http %@", id, info.url!)
         
-        var req = URLRequest(url: url)
+        var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 60)
         
+        for (key, value) in info.headers {
+            req.addValue(value, forHTTPHeaderField: key)
+        }
+
         if info.body != nil {
             if info.base64DecodeRequestBody {
                 req.httpBody = Data(base64Encoded: info.body!)
@@ -63,7 +67,6 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
 
             if error != nil {
                 NSLog("error: %@", error!.localizedDescription)
-                self.downloadListener.onStarted(taskId: id, headers: [String: String]())
                 self.downloadListener.onError(taskId: id)
             }
             else {
@@ -85,7 +88,6 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
                     let contentType = httpResponse.allHeaderFields["Content-Type"] as? String
                     let headers = httpResponse.headersAsStrings()
                     
-                    self.downloadListener.onStarted(taskId: id, headers: headers)
                     self.downloadListener.onComplete(taskId: id, headers: headers,
                                                      contentType: contentType, body: body,
                                                      statusCode: httpResponse.statusCode)
@@ -130,7 +132,12 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
         
         let urlSession = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
         
-        let task = urlSession.downloadTask(with: url)
+        var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 60)
+        for (key, value) in info.headers {
+            req.addValue(value, forHTTPHeaderField: key)
+        }
+        
+        let task = urlSession.downloadTask(with: req)
         
         transfers[id] = info
         taskToId[task] = id
@@ -141,77 +148,140 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
         return id
     }
     
+    func getListenerFor(task: URLSessionTask) -> WebTransferListener {
+        if task is URLSessionDownloadTask {
+            return downloadListener
+        }
+        return uploadListener
+    }
+    
     public func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        if error == nil {
-            NSLog("download done with no error")
+        guard let taskId = taskToId[task] else {
+            NSLog("download done for unknown task")
             return
+        }
+        
+        let listener = getListenerFor(task: task)
+        
+        if error == nil {
+            guard let httpResponse = task.response as? HTTPURLResponse else {
+                NSLog("download done w/o HTTPURLResponse?")
+                return
+            }
+            
+            let contentType = httpResponse.allHeaderFields["Content-Type"] as? String
+            let headers = httpResponse.headersAsStrings()
+            
+            listener.onComplete(taskId: taskId, headers: headers,
+                                contentType: contentType, body: nil,
+                                statusCode: httpResponse.statusCode)
         }
         else {
             NSLog("download error: %@", error!.localizedDescription)
             
-            if let downloadTask = task as? URLSessionDownloadTask {
-                let taskId = taskToId[downloadTask]!
-                
-                downloadListener.onError(taskId: taskId)
-            }
+            listener.onError(taskId: taskId)
         }
-        
-        if let id = taskToId[task] {
-            cleanup(id: id)
-        }
+
+        cleanup(id: taskId)
     }
     
-    public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+    public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
+                           didWriteData bytesWritten: Int64, totalBytesWritten: Int64,
+                           totalBytesExpectedToWrite: Int64) {
         NSLog("download progress: %d %d", totalBytesWritten, totalBytesExpectedToWrite)
         
-        let taskId = taskToId[downloadTask]!
+        guard let taskId = taskToId[downloadTask] else {
+            NSLog("download progress for unknown task?")
+            return
+        }
         
-        downloadListener.onProgress(taskId: taskId, bytes: Int(totalBytesWritten), total: Int(totalBytesExpectedToWrite))
+        let headers = [String: String]()
+        
+        downloadListener.onProgress(taskId: taskId, headers: headers,
+                                    bytes: Int(totalBytesWritten),
+                                    total: Int(totalBytesExpectedToWrite))
     }
     
     public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
-        NSLog("download of %@ complete", location.absoluteString)
+        guard let taskId = taskToId[downloadTask] else {
+            NSLog("download done for unknown task")
+            return
+        }
         
-        let taskId = taskToId[downloadTask]!
         let taskInfo = transfers[taskId]!
-        
+
         NSLog("[%@] download completed: %@", taskId, taskInfo.path!)
         
-        if let httpResponse = downloadTask.response as? HTTPURLResponse {
-            do {
-                try FileManager.default.removeItem(atPath: taskInfo.path!)
-            }
-            catch let error {
-                NSLog("[%@] download completed: remove failed: %@", taskId, error.localizedDescription)
-            }
+        do {
+            try FileManager.default.removeItem(atPath: taskInfo.path!)
+        }
+        catch let error {
+            NSLog("[%@] remove failed: %@", taskId, error.localizedDescription)
+        }
+        
+        do {
+            let destinyURL = NSURL.fileURL(withPath: taskInfo.path!)
             
-            do {
-                let contentType = httpResponse.allHeaderFields["Content-Type"] as? String
-                let headers = httpResponse.headersAsStrings()
-                
-                let destinyURL = NSURL.fileURL(withPath: taskInfo.path!)
-                
-                NSLog("[%@] download completed: moving to %@", taskId, destinyURL.absoluteString)
-                
-                try FileManager.default.moveItem(at: location, to: destinyURL)
-                
-                NSLog("[%@] download completed: moved", taskId)
-                
-                downloadListener.onComplete(taskId: taskId, headers: headers, contentType: contentType, body: nil, statusCode: httpResponse.statusCode)
-            }
-            catch let error {
-                NSLog("[%@] download completed: ERROR %@", taskId, error.localizedDescription)
-                
-                downloadListener.onError(taskId: taskId)
-            }
+            NSLog("[%@] download completed: moving to %@", taskId, destinyURL.absoluteString)
+            
+            try FileManager.default.moveItem(at: location, to: destinyURL)
+            
+            NSLog("[%@] download completed: moved", taskId)
+        }
+        catch let error {
+            NSLog("[%@] error %@", taskId, error.localizedDescription)
+            
+            downloadListener.onError(taskId: taskId)
         }
     }
     
     @objc
     public func upload(info: WebTransfer) -> String {
-        let id = UUID().uuidString
+        let id = info.id
+        
+        NSLog("[%@] uploading %@", id, info.url!)
+        
+        let url = URL(string: info.url!)!
+        
+        let urlSession = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
+        
+        let sourceURL = NSURL.fileURL(withPath: info.path!)
+        var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 60)
+
+        req.httpMethod = "POST"
+        
+        for (key, value) in info.headers {
+            req.addValue(value, forHTTPHeaderField: key)
+        }
+        
+        let task = urlSession.uploadTask(with: req, fromFile: sourceURL)
+        
+        transfers[id] = info
+        taskToId[task] = id
+        idToTask[id] = task
+        
+        task.resume()
         
         return id
+    }
+    
+    public func urlSession(_ session: URLSession,
+                    task: URLSessionTask,
+                    didSendBodyData bytesSent: Int64,
+                    totalBytesSent: Int64,
+                    totalBytesExpectedToSend: Int64) {
+        NSLog("upload progress: %d %d", totalBytesSent, totalBytesExpectedToSend)
+        
+        guard let taskId = taskToId[task] else {
+            NSLog("upload progress for unknown task?")
+            return
+        }
+
+        let headers = [String: String]()
+        
+        uploadListener.onProgress(taskId: taskId, headers: headers,
+                                  bytes: Int(totalBytesSent),
+                                  total: Int(totalBytesExpectedToSend))
     }
 }
 
