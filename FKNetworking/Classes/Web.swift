@@ -9,6 +9,7 @@ import Foundation
 
 @objc
 open class WebTransfer : NSObject {
+    @objc public var id: String = UUID().uuidString
     @objc public var url: String? = nil
     @objc public var path: String? = nil
     @objc public var body: String? = nil
@@ -23,8 +24,9 @@ open class WebTransfer : NSObject {
 
 @objc
 open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
-    var downloads: [URLSessionDownloadTask: String] = [URLSessionDownloadTask: String]();
-    var tasks: [String: WebTransfer] = [String: WebTransfer]();
+    var taskToId: [URLSessionTask: String] = [URLSessionTask: String]();
+    var idToTask: [String: URLSessionTask] = [String: URLSessionTask]();
+    var transfers: [String: WebTransfer] = [String: WebTransfer]();
     
     var uploadListener: WebTransferListener
     var downloadListener: WebTransferListener
@@ -37,7 +39,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
     }
     
     func basic(info: WebTransfer) -> String {
-        let id = UUID().uuidString
+        let id = info.id
         
         let url = URL(string: info.url!)!
         
@@ -50,30 +52,44 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
                 NSLog("error: %@", error!.localizedDescription)
                 self.downloadListener.onStarted(taskId: id, headers: [String: String]())
                 self.downloadListener.onError(taskId: id)
-                return
-            }
-            
-            if let httpResponse = response as? HTTPURLResponse {
-                guard let data = data else { return }
-                
-                let body = String(data: data, encoding: .utf8)
-                
-                NSLog("body: %@", body!)
-                
-                let contentType = httpResponse.allHeaderFields["Content-Type"] as? String
-                let headers = httpResponse.headersAsStrings()
-                
-                self.downloadListener.onStarted(taskId: id, headers: headers)
-                self.downloadListener.onComplete(taskId: id, headers: headers, contentType: contentType, body: body!, statusCode: httpResponse.statusCode)
             }
             else {
-                NSLog("[%@] unexpected response %@", id, response.debugDescription)
+                if let httpResponse = response as? HTTPURLResponse {
+                    guard let data = data else { return }
+                    
+                    let body = String(data: data, encoding: .utf8)
+                    
+                    NSLog("body: %@", body!)
+                    
+                    let contentType = httpResponse.allHeaderFields["Content-Type"] as? String
+                    let headers = httpResponse.headersAsStrings()
+                    
+                    self.downloadListener.onStarted(taskId: id, headers: headers)
+                    self.downloadListener.onComplete(taskId: id, headers: headers, contentType: contentType, body: body!, statusCode: httpResponse.statusCode)
+                }
+                else {
+                    NSLog("[%@] unexpected response %@", id, response.debugDescription)
+                }
             }
+            
+            self.cleanup(id: id)
         }
         
-        task.resume()
+        transfers[id] = info
+        taskToId[task] = id
+        idToTask[id] = task
         
+        task.resume()
+
         return id
+    }
+    
+    func cleanup(id: String) {
+        if let task = idToTask[id] {
+            transfers[id] = nil
+            idToTask[id] = nil
+            taskToId[task] = nil
+        }
     }
     
     @objc
@@ -88,8 +104,8 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
     
     @objc
     public func download(info: WebTransfer) -> String {
-        let id = UUID().uuidString
-        
+        let id = info.id
+
         NSLog("[%@] downloading %@", id, info.url!)
         
         let url = URL(string: info.url!)!
@@ -98,8 +114,9 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
         
         let task = urlSession.downloadTask(with: url)
         
-        tasks[id] = info
-        downloads[task] = id
+        transfers[id] = info
+        taskToId[task] = id
+        idToTask[id] = task
         
         task.resume()
         
@@ -111,20 +128,25 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
             NSLog("download done with no error")
             return
         }
-        
-        NSLog("download error: %@", error!.localizedDescription)
-        
-        if let downloadTask = task as? URLSessionDownloadTask {
-            let taskId = downloads[downloadTask]!
+        else {
+            NSLog("download error: %@", error!.localizedDescription)
             
-            downloadListener.onError(taskId: taskId)
+            if let downloadTask = task as? URLSessionDownloadTask {
+                let taskId = taskToId[downloadTask]!
+                
+                downloadListener.onError(taskId: taskId)
+            }
+        }
+        
+        if let id = taskToId[task] {
+            cleanup(id: id)
         }
     }
     
     public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
         NSLog("download progress: %d %d", totalBytesWritten, totalBytesExpectedToWrite)
         
-        let taskId = downloads[downloadTask]!
+        let taskId = taskToId[downloadTask]!
         
         downloadListener.onProgress(taskId: taskId, bytes: Int(totalBytesWritten), total: Int(totalBytesExpectedToWrite))
     }
@@ -132,8 +154,8 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
     public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
         NSLog("download of %@ complete", location.absoluteString)
         
-        let taskId = downloads[downloadTask]!
-        let taskInfo = tasks[taskId]!
+        let taskId = taskToId[downloadTask]!
+        let taskInfo = transfers[taskId]!
         
         NSLog("[%@] download completed: %@", taskId, taskInfo.path!)
         
