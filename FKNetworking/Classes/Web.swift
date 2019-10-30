@@ -67,7 +67,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
 
             if error != nil {
                 NSLog("error: %@", error!.localizedDescription)
-                self.downloadListener.onError(taskId: id)
+                self.downloadListener.onError(taskId: id, message: error!.localizedDescription)
             }
             else {
                 if let httpResponse = response as? HTTPURLResponse {
@@ -179,7 +179,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
         else {
             NSLog("download error: %@", error!.localizedDescription)
             
-            listener.onError(taskId: taskId)
+            listener.onError(taskId: taskId, message: error!.localizedDescription)
         }
 
         cleanup(id: taskId)
@@ -231,7 +231,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
         catch let error {
             NSLog("[%@] error %@", taskId, error.localizedDescription)
             
-            downloadListener.onError(taskId: taskId)
+            downloadListener.onError(taskId: taskId, message: error.localizedDescription)
         }
     }
     

@@ -11,5 +11,5 @@ import Foundation
 public protocol WebTransferListener {
     func onProgress(taskId: String, headers: [String: String], bytes: Int, total: Int)
     func onComplete(taskId: String, headers: [String: String], contentType: String!, body: Any!, statusCode: Int)
-    func onError(taskId: String)
+    func onError(taskId: String, message: String)
 }
