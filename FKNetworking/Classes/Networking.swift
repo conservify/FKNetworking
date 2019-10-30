@@ -52,23 +52,40 @@ public protocol NetworkingListener {
 
 @objc
 public protocol WebTransferListener {
-    func onStarted(taskId: String, headers: [String:String])
+    func onStarted(taskId: String, headers: [String: String])
     func onProgress(taskId: String, bytes: Int, total: Int)
-    func onComplete(taskId: String, headers: [String:String], contentType: String, body: Any, statusCode: Int)
+    func onComplete(taskId: String, headers: [String: String], contentType: String!, body: Any!, statusCode: Int)
     func onError(taskId: String)
 }
 
 @objc
 open class WebTransfer : NSObject {
-    @objc var url: String? = nil
-    @objc var path: String? = nil
-    @objc var body: String? = nil
-    @objc var contentType: String? = nil
-    @objc var headers: [String: String] = [String:String]()
+    @objc public var url: String? = nil
+    @objc public var path: String? = nil
+    @objc public var body: String? = nil
+    @objc public var contentType: String? = nil
+    @objc public var headers: [String: String] = [String:String]()
+}
+
+extension HTTPURLResponse {
+    func headersAsStrings() -> [String: String] {
+        var headers = [String:String]()
+
+        for (storedKey, storedValue) in self.allHeaderFields {
+            if let stringKey = storedKey as? String, let stringValue = storedValue as? String {
+                headers[stringKey] = stringValue
+            }
+        }
+        
+        return headers
+    }
 }
 
 @objc
-open class Web : NSObject {
+open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
+    var downloads: [URLSessionDownloadTask: String] = [URLSessionDownloadTask: String]();
+    var tasks: [String: WebTransfer] = [String: WebTransfer]();
+    
     var uploadListener: WebTransferListener
     var downloadListener: WebTransferListener
     
@@ -81,22 +98,126 @@ open class Web : NSObject {
     
     @objc
     public func json(info: WebTransfer) -> String {
-        return ""
+        let id = UUID().uuidString
+
+        let url = URL(string: info.url!)!
+
+        let task = URLSession.shared.dataTask(with: url) { (data, response, error) in
+            if let httpResponse = response as? HTTPURLResponse {
+                guard let data = data else { return }
+                
+                let body = String(data: data, encoding: .utf8)
+                
+                NSLog("json: %@", body!)
+                
+                let contentType = httpResponse.allHeaderFields["Content-Type"] as? String
+                let headers = httpResponse.headersAsStrings()
+                
+                self.downloadListener.onStarted(taskId: id, headers: headers)
+                self.downloadListener.onComplete(taskId: id, headers: headers, contentType: contentType, body: body!, statusCode: httpResponse.statusCode)
+            }
+        }
+
+        task.resume()
+
+        return id
     }
     
     @objc
     public func binary(info: WebTransfer) -> String {
-        return ""
-    }
+        let id = UUID().uuidString
 
+        let url = URL(string: info.url!)!
+        
+        let task = URLSession.shared.dataTask(with: url) { (data, response, error) in
+            if let httpResponse = response as? HTTPURLResponse {
+                guard let data = data else { return }
+                
+                let body = String(data: data, encoding: .utf8)
+                
+                NSLog("json: %@", body!)
+                
+                let contentType = httpResponse.allHeaderFields["Content-Type"] as? String
+                let headers = httpResponse.headersAsStrings()
+                
+                self.downloadListener.onStarted(taskId: id, headers: headers)
+                self.downloadListener.onComplete(taskId: id, headers: headers, contentType: contentType, body: body!, statusCode: httpResponse.statusCode)
+            }
+        }
+        
+        task.resume()
+        
+        return id
+    }
+    
     @objc
     public func download(info: WebTransfer) -> String {
-        return ""
+        let id = UUID().uuidString
+        
+        NSLog("[%@] downloading %@", id, info.url!)
+        
+        let url = URL(string: info.url!)!
+        
+        let urlSession = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
+        
+        let task = urlSession.downloadTask(with: url)
+        
+        tasks[id] = info
+        downloads[task] = id
+        
+        task.resume()
+        
+        return id
     }
 
     @objc
     public func upload(info: WebTransfer) -> String {
-        return ""
+        let id = UUID().uuidString
+
+        return id
+    }
+    
+    public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+        NSLog("download progress: %d %d", totalBytesWritten, totalBytesExpectedToWrite)
+    }
+    
+    public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+        // check for and handle errors:
+        // * downloadTask.response should be an HTTPURLResponse with statusCode in 200..<299
+
+        NSLog("download completed: %@", location.absoluteString)
+        
+        let taskId = downloads[downloadTask]!
+        let taskInfo = tasks[taskId]!
+        
+        NSLog("download completed: %@ %@", taskId, taskInfo.path!)
+
+        if let httpResponse = downloadTask.response as? HTTPURLResponse {
+            do {
+                try FileManager.default.removeItem(atPath: taskInfo.path!)
+            }
+            catch let error {
+                NSLog("download completed: remove failed: %@", error.localizedDescription)
+            }
+            
+            do {
+                let contentType = httpResponse.allHeaderFields["Content-Type"] as? String
+                let headers = httpResponse.headersAsStrings()
+
+                let destinyURL = NSURL.fileURL(withPath: taskInfo.path!)
+
+                NSLog("download completed: moving to %@", destinyURL.absoluteString)
+
+                try FileManager.default.moveItem(at: location, to: destinyURL)
+                
+                NSLog("download completed: moved")
+
+                downloadListener.onComplete(taskId: taskId, headers: headers, contentType: contentType, body: nil, statusCode: httpResponse.statusCode)
+            }
+            catch let error {
+                NSLog("download completed: ERROR %@", error.localizedDescription)
+            }
+        }
     }
 }
 
