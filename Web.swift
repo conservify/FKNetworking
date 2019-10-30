@@ -36,21 +36,24 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
         super.init()
     }
     
-    @objc
-    public func json(info: WebTransfer) -> String {
+    func basic(info: WebTransfer) -> String {
         let id = UUID().uuidString
         
         let url = URL(string: info.url!)!
         
+        NSLog("[%@] http %@", id, info.url!)
+        
         let task = URLSession.shared.dataTask(with: url) { (data, response, error) in
+            NSLog("[%@] completed", id)
+
+            if error != nil {
+                NSLog("error: %@", error!.localizedDescription)
+                self.downloadListener.onStarted(taskId: id, headers: [String: String]())
+                self.downloadListener.onError(taskId: id)
+                return
+            }
+            
             if let httpResponse = response as? HTTPURLResponse {
-                if error != nil {
-                    NSLog("error: %@", error!.localizedDescription)
-                    self.downloadListener.onStarted(taskId: id, headers: [String: String]())
-                    self.downloadListener.onError(taskId: id)
-                    return
-                }
-                
                 guard let data = data else { return }
                 
                 let body = String(data: data, encoding: .utf8)
@@ -62,6 +65,9 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
                 
                 self.downloadListener.onStarted(taskId: id, headers: headers)
                 self.downloadListener.onComplete(taskId: id, headers: headers, contentType: contentType, body: body!, statusCode: httpResponse.statusCode)
+            }
+            else {
+                NSLog("[%@] unexpected response %@", id, response.debugDescription)
             }
         }
         
@@ -71,36 +77,13 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
     }
     
     @objc
+    public func json(info: WebTransfer) -> String {
+        return basic(info: info)
+    }
+    
+    @objc
     public func binary(info: WebTransfer) -> String {
-        let id = UUID().uuidString
-        
-        let url = URL(string: info.url!)!
-        
-        let task = URLSession.shared.dataTask(with: url) { (data, response, error) in
-            if let httpResponse = response as? HTTPURLResponse {
-                if error != nil {
-                    NSLog("error: %@", error!.localizedDescription)
-                    self.downloadListener.onError(taskId: id)
-                    return
-                }
-                
-                guard let data = data else { return }
-                
-                let body = String(data: data, encoding: .utf8)
-                
-                NSLog("body: %@", body!)
-                
-                let contentType = httpResponse.allHeaderFields["Content-Type"] as? String
-                let headers = httpResponse.headersAsStrings()
-                
-                self.downloadListener.onStarted(taskId: id, headers: headers)
-                self.downloadListener.onComplete(taskId: id, headers: headers, contentType: contentType, body: body!, statusCode: httpResponse.statusCode)
-            }
-        }
-        
-        task.resume()
-        
-        return id
+        return basic(info: info)
     }
     
     @objc
