@@ -172,8 +172,10 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
             let contentType = httpResponse.allHeaderFields["Content-Type"] as? String
             let headers = httpResponse.headersAsStrings()
             
-            listener.onComplete(taskId: taskId, headers: headers,
-                                contentType: contentType, body: nil,
+            listener.onComplete(taskId: taskId,
+                                headers: headers,
+                                contentType: contentType,
+                                body: nil,
                                 statusCode: httpResponse.statusCode)
         }
         else {
