@@ -10,6 +10,7 @@ import Foundation
 @objc
 open class WebTransfer : NSObject {
     @objc public var id: String = UUID().uuidString
+    @objc public var method: String? = nil
     @objc public var url: String? = nil
     @objc public var path: String? = nil
     @objc public var body: String? = nil
@@ -21,6 +22,10 @@ open class WebTransfer : NSObject {
     @objc public func header(key: String, value: String) -> WebTransfer {
         headers[key] = value
         return self
+    }
+    
+    @objc public var methodOrDefault: String {
+        return method ?? "GET"
     }
 }
 
@@ -48,6 +53,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
         NSLog("[%@] http %@", id, info.url!)
         
         var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 60)
+        req.httpMethod = info.methodOrDefault
         
         for (key, value) in info.headers {
             req.addValue(value, forHTTPHeaderField: key)
@@ -133,6 +139,8 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
         let urlSession = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
         
         var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 60)
+        req.httpMethod = info.methodOrDefault
+        
         for (key, value) in info.headers {
             req.addValue(value, forHTTPHeaderField: key)
         }
@@ -249,8 +257,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
         
         let sourceURL = NSURL.fileURL(withPath: info.path!)
         var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 60)
-
-        req.httpMethod = "POST"
+        req.httpMethod = info.methodOrDefault
         
         for (key, value) in info.headers {
             req.addValue(value, forHTTPHeaderField: key)
