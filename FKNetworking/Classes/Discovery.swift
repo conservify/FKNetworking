@@ -32,6 +32,11 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
         networkingListener.onStarted()
     }
     
+    @objc
+    public func stop() {
+        browser.stop()
+    }
+    
     public func netServiceWillResolve(_ sender: NetService) {
         NSLog("ServiceDiscovery::netServiceWillResolve");
     }
