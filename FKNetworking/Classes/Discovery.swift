@@ -29,7 +29,6 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
         browser.delegate = self
         browser.stop()
         browser.searchForServices(ofType: serviceType, inDomain: "local.")
-        networkingListener.onStarted()
     }
     
     @objc
@@ -59,6 +58,8 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
     
     public func netServiceBrowserWillSearch(_ browser: NetServiceBrowser) {
         NSLog("ServiceDiscovery::willSearch")
+        
+        networkingListener.onStarted()
     }
     
     public func netServiceBrowserDidStopSearch(_ browser: NetServiceBrowser) {
@@ -70,6 +71,7 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
         for (key, code) in errorDict {
             NSLog("ServiceDiscovery::didNotSearch(Errors): %@ = %@", key, code);
         }
+        networkingListener.onDiscoveryFailed()
     }
     
     public func netServiceBrowser(_ browser: NetServiceBrowser, didFindDomain domainString: String, moreComing: Bool) {

@@ -40,8 +40,11 @@ open class WifiNetworks : NSObject {
 @objc
 public protocol NetworkingListener {
     func onStarted()
+    
+    func onDiscoveryFailed()
     func onFoundService(service: ServiceInfo)
     func onLostService(service: ServiceInfo)
+    
     func onConnectionInfo(connected: Bool)
     func onConnectedNetwork(network: WifiNetwork?)
     func onNetworksFound(networks: WifiNetworks)
