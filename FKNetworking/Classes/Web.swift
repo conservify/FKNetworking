@@ -50,7 +50,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
         
         let url = URL(string: info.url!)!
         
-        NSLog("[%@] http %@", id, info.url!)
+        NSLog("[%@] http %@ %@", id, info.url!, info.methodOrDefault)
         
         var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 60)
         req.httpMethod = info.methodOrDefault

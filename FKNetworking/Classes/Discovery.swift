@@ -67,6 +67,9 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
     
     public func netServiceBrowser(_ browser: NetServiceBrowser, didNotSearch errorDict: [String : NSNumber]) {
         NSLog("ServiceDiscovery::didNotSearch");
+        for (key, code) in errorDict {
+            NSLog("ServiceDiscovery::didNotSearch(Errors): %@ = %@", key, code);
+        }
     }
     
     public func netServiceBrowser(_ browser: NetServiceBrowser, didFindDomain domainString: String, moreComing: Bool) {
