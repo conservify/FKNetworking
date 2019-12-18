@@ -27,6 +27,10 @@ open class WebTransfer : NSObject {
     @objc public var methodOrDefault: String {
         return method ?? "GET"
     }
+    
+    @objc public var isGET: Bool {
+        return methodOrDefault == "GET"
+    }
 }
 
 @objc
@@ -60,11 +64,16 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
         }
 
         if info.body != nil {
-            if info.base64DecodeRequestBody {
-                req.httpBody = Data(base64Encoded: info.body!)
+            if info.isGET {
+                NSLog("[%@] WARNING: ignoring body for GET", id)
             }
             else {
-                req.httpBody = info.body!.data(using: .utf8)
+                if info.base64DecodeRequestBody {
+                    req.httpBody = Data(base64Encoded: info.body!)
+                }
+                else {
+                    req.httpBody = info.body!.data(using: .utf8)
+                }
             }
         }
         
