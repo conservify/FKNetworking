@@ -38,6 +38,14 @@ open class WifiNetworks : NSObject {
 }
 
 @objc
+open class NetworkingStatus : NSObject {
+    @objc public var connected: Bool = false;
+    @objc public var connectedWifi: WifiNetwork? = nil;
+    @objc public var wifiNeworks: WifiNetworks? = nil;
+    @objc public var scanError: Bool = false;
+}
+
+@objc
 public protocol NetworkingListener {
     func onStarted()
     
@@ -45,8 +53,5 @@ public protocol NetworkingListener {
     func onFoundService(service: ServiceInfo)
     func onLostService(service: ServiceInfo)
     
-    func onConnectionInfo(connected: Bool)
-    func onConnectedNetwork(network: WifiNetwork?)
-    func onNetworksFound(networks: WifiNetworks)
-    func onNetworkScanError()
+    func onNetworkStatus(status: NetworkingStatus)
 }

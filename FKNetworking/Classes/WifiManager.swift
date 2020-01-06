@@ -20,22 +20,25 @@ open class WifiManager : NSObject {
     
     @objc
     public func findConnectedNetwork() {
+        let status = NetworkingStatus()
         let current = currentSSIDs()
         if current.count > 0 {
             for ssid in current {
                 let network = WifiNetwork(ssid: ssid)
-                networkingListener.onConnectedNetwork(network: network)
+                status.connectedWifi = network
+                networkingListener.onNetworkStatus(status: status)
             }
         }
         else {
-            networkingListener.onConnectedNetwork(network: nil)
+            networkingListener.onNetworkStatus(status: status)
         }
     }
     
     @objc
     public func scan() {
-        let networks = WifiNetworks()
-        networkingListener.onNetworksFound(networks: networks)
+        let status = NetworkingStatus()
+        status.wifiNeworks = WifiNetworks()
+        networkingListener.onNetworkStatus(status: status)
     }
     
     func currentSSIDs() -> [String] {
