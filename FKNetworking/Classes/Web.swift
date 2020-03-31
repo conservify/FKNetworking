@@ -34,10 +34,11 @@ open class WebTransfer : NSObject {
 }
 
 @objc
-open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
+open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSessionDataDelegate {
     var taskToId: [URLSessionTask: String] = [URLSessionTask: String]();
     var idToTask: [String: URLSessionTask] = [String: URLSessionTask]();
     var transfers: [String: WebTransfer] = [String: WebTransfer]();
+    var received: [String: Data] = [String: Data]();
     
     var uploadListener: WebTransferListener
     var downloadListener: WebTransferListener
@@ -129,6 +130,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
             transfers[id] = nil
             idToTask[id] = nil
             taskToId[task] = nil
+            received[id] = nil
         }
     }
     
@@ -156,6 +158,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
         
         let task = urlSession.downloadTask(with: req)
         
+        received[id] = Data()
         transfers[id] = info
         taskToId[task] = id
         idToTask[id] = task
@@ -178,7 +181,10 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
             return
         }
         
+        NSLog("[%@] transfer completed", taskId)
+
         let listener = getListenerFor(task: task)
+        let taskInfo = transfers[taskId]!
         
         if error == nil {
             guard let httpResponse = task.response as? HTTPURLResponse else {
@@ -186,13 +192,24 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
                 return
             }
             
+            let response = received[taskId]!
             let contentType = httpResponse.allHeaderFields["Content-Type"] as? String
             let headers = httpResponse.headersAsStrings()
+            
+            var body: String?
+            if taskInfo.base64EncodeResponseBody {
+                body = String(data: response.base64EncodedData(), encoding: .utf8)
+                NSLog("encoded body: %@", body!)
+            }
+            else {
+                body = String(data: response, encoding: .utf8)
+                NSLog("string body: %@", body!)
+            }
             
             listener.onComplete(taskId: taskId,
                                 headers: headers,
                                 contentType: contentType,
-                                body: nil,
+                                body: body,
                                 statusCode: httpResponse.statusCode)
         }
         else {
@@ -274,6 +291,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
         
         let task = urlSession.uploadTask(with: req, fromFile: sourceURL)
         
+        received[id] = Data()
         transfers[id] = info
         taskToId[task] = id
         idToTask[id] = task
@@ -300,6 +318,19 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
         uploadListener.onProgress(taskId: taskId, headers: headers,
                                   bytes: Int(totalBytesSent),
                                   total: Int(totalBytesExpectedToSend))
+    }
+    
+    public func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        guard let taskId = taskToId[dataTask] else {
+            NSLog("transfer done for unknown task")
+            return
+        }
+        
+        // let taskInfo = transfers[taskId]!
+        
+        NSLog("[%@] transfer received data (%d)", taskId, data.count)
+        
+        received[taskId]!.append(data)
     }
 }
 
