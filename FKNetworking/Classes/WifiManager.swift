@@ -42,18 +42,16 @@ open class WifiManager : NSObject {
     }
     
     func currentSSIDs() -> [String] {
-        guard let interfaceNames = CNCopySupportedInterfaces() as? [String] else {
-            return []
-        }
-        
-        return interfaceNames.compactMap { name in
-            guard let info = CNCopyCurrentNetworkInfo(name as CFString) as? [String:AnyObject] else {
-                return nil
+        var ssids: [String] = []
+        if let interfaces = CNCopySupportedInterfaces() as NSArray? {
+            for interface in interfaces {
+                if let interfaceInfo = CNCopyCurrentNetworkInfo(interface as! CFString) as NSDictionary? {
+                    if let ssid = interfaceInfo[kCNNetworkInfoKeySSID as String] as? String {
+                        ssids.append(ssid)
+                    }
+                }
             }
-            guard let ssid = info[kCNNetworkInfoKeySSID as String] as? String else {
-                return nil
-            }
-            return ssid
         }
+        return ssids
     }
 }
