@@ -7,9 +7,16 @@
 
 import Foundation
 
+var tokens: UInt64 = 0
+
+func newToken() -> String {
+    tokens += 1
+    return "cfynw-\(tokens)"
+}
+
 @objc
 open class WebTransfer : NSObject {
-    @objc public var id: String = UUID().uuidString
+    @objc public var id: String = newToken()
     @objc public var method: String? = nil
     @objc public var url: String? = nil
     @objc public var path: String? = nil
@@ -35,6 +42,7 @@ open class WebTransfer : NSObject {
 
 @objc
 open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSessionDataDelegate {
+    var tokens: UInt64 = 0
     var taskToId: [URLSessionTask: String] = [URLSessionTask: String]();
     var idToTask: [String: URLSessionTask] = [String: URLSessionTask]();
     var transfers: [String: WebTransfer] = [String: WebTransfer]();
@@ -48,6 +56,11 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
         self.uploadListener = uploadListener
         self.downloadListener = downloadListener
         super.init()
+    }
+    
+    func newToken() -> String {
+        tokens += 1
+        return "cfynw-\(tokens)"
     }
     
     func basic(info: WebTransfer) -> String {
