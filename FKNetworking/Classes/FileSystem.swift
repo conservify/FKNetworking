@@ -11,6 +11,7 @@ import SwiftProtobuf
 @objc
 open class ReadOptions : NSObject {
     @objc public var batchSize: UInt64 = 10;
+    @objc public var base64EncodeData: Bool = true;
 }
 
 @objc
@@ -79,7 +80,7 @@ open class PbFile : NSObject {
                 let attr = try fm.attributesOfItem(atPath: self.path)
                 let size = attr[FileAttributeKey.size] as! UInt64
                 if let stream = InputStream(fileAtPath: self.path) {
-                    var records: [Data] = []
+                    var records: [Any] = []
                     
                     stream.open()
                     
@@ -115,7 +116,13 @@ open class PbFile : NSObject {
                         
                         position += UInt64(bytesRead)
                         
-                        records.append(data)
+                        if options.base64EncodeData {
+                            if let encoded = String(data: data.base64EncodedData(), encoding: .utf8) {
+                                records.append(encoded)
+                            }
+                        } else {
+                            records.append(data)
+                        }
                         
                         if records.count == options.batchSize {
                             listener.onFileRecords(path: self.path, token: token, position: position, size: size, records: records)
