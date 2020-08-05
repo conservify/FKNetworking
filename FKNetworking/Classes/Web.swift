@@ -66,7 +66,11 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
     func basic(info: WebTransfer) -> String {
         let id = info.id
         
-        let url = URL(string: info.url!)!
+        guard let url = URL(string: info.url!) else {
+            NSLog("[%@] invalid url", id)
+            downloadListener.onError(taskId: id, message: "invalid url")
+            return id
+        }
         
         NSLog("[%@] http %@ %@", id, info.url!, info.methodOrDefault)
         
@@ -158,7 +162,11 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
 
         NSLog("[%@] downloading %@", id, info.url!)
         
-        let url = URL(string: info.url!)!
+        guard let url = URL(string: info.url!) else {
+            NSLog("[%@] invalid url", id)
+            downloadListener.onError(taskId: id, message: "invalid url")
+            return id
+        }
         
         let urlSession = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
         
@@ -287,10 +295,14 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
     @objc
     public func upload(info: WebTransfer) -> String {
         let id = info.id
-        
+                
         NSLog("[%@] uploading %@", id, info.url!)
         
-        let url = URL(string: info.url!)!
+        guard let url = URL(string: info.url!) else {
+            NSLog("[%@] invalid url", id)
+            uploadListener.onError(taskId: id, message: "invalid url")
+            return id
+        }
         
         let urlSession = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
         
