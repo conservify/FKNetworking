@@ -95,7 +95,13 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
             }
         }
         
-        let task = URLSession.shared.dataTask(with: req) { (data, response, error) in
+        let sessionConfig = URLSessionConfiguration.default
+        if #available(iOS 11.0, *) {
+            sessionConfig.waitsForConnectivity = true
+            sessionConfig.timeoutIntervalForResource = 60
+        }
+
+        let task = URLSession(configuration: sessionConfig).dataTask(with: req) { (data, response, error) in
             NSLog("[%@] completed", id)
 
             if error != nil {
@@ -167,8 +173,14 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
             downloadListener.onError(taskId: id, message: "invalid url")
             return id
         }
-        
-        let urlSession = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
+
+        let sessionConfig = URLSessionConfiguration.default
+        if #available(iOS 11.0, *) {
+            sessionConfig.waitsForConnectivity = true
+            sessionConfig.timeoutIntervalForResource = 60
+        }
+
+        let urlSession = URLSession(configuration: sessionConfig, delegate: self, delegateQueue: nil)
         
         var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 60)
         req.httpMethod = info.methodOrDefault
@@ -227,16 +239,20 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
                 NSLog("string body: %@", body!)
             }
             
-            listener.onComplete(taskId: taskId,
-                                headers: headers,
-                                contentType: contentType,
-                                body: body,
-                                statusCode: httpResponse.statusCode)
+            OperationQueue.main.addOperation {
+                listener.onComplete(taskId: taskId,
+                                    headers: headers,
+                                    contentType: contentType,
+                                    body: body,
+                                    statusCode: httpResponse.statusCode)
+            }
         }
         else {
             NSLog("download error: %@", error!.localizedDescription)
             
-            listener.onError(taskId: taskId, message: error!.localizedDescription)
+            OperationQueue.main.addOperation {
+                listener.onError(taskId: taskId, message: error!.localizedDescription)
+            }
         }
 
         cleanup(id: taskId)
@@ -254,9 +270,11 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
         
         let headers = [String: String]()
         
-        downloadListener.onProgress(taskId: taskId, headers: headers,
-                                    bytes: Int(totalBytesWritten),
-                                    total: Int(totalBytesExpectedToWrite))
+        OperationQueue.main.addOperation {
+            self.downloadListener.onProgress(taskId: taskId, headers: headers,
+                                        bytes: Int(totalBytesWritten),
+                                        total: Int(totalBytesExpectedToWrite))
+        }
     }
     
     public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
@@ -287,8 +305,10 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
         }
         catch let error {
             NSLog("[%@] error %@", taskId, error.localizedDescription)
-            
-            downloadListener.onError(taskId: taskId, message: error.localizedDescription)
+        
+            OperationQueue.main.addOperation {
+                self.downloadListener.onError(taskId: taskId, message: error.localizedDescription)
+            }
         }
     }
     
@@ -304,7 +324,13 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
             return id
         }
         
-        let urlSession = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
+        let sessionConfig = URLSessionConfiguration.default
+        if #available(iOS 11.0, *) {
+            sessionConfig.waitsForConnectivity = true
+            sessionConfig.timeoutIntervalForResource = 60
+        }
+        
+        let urlSession = URLSession(configuration: sessionConfig, delegate: self, delegateQueue: nil)
         
         let sourceURL = NSURL.fileURL(withPath: info.path!)
         var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 60)
@@ -340,9 +366,11 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
 
         let headers = [String: String]()
         
-        uploadListener.onProgress(taskId: taskId, headers: headers,
+        OperationQueue.main.addOperation {
+            self.uploadListener.onProgress(taskId: taskId, headers: headers,
                                   bytes: Int(totalBytesSent),
                                   total: Int(totalBytesExpectedToSend))
+        }
     }
     
     public func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
