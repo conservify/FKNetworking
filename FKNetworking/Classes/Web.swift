@@ -42,6 +42,8 @@ open class WebTransfer : NSObject {
 
 @objc
 open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSessionDataDelegate {
+    var lastProgress: Date = Date.distantPast
+    var minimumDelay: TimeInterval = 0.5
     var tokens: UInt64 = 0
     var taskToId: [URLSessionTask: String] = [URLSessionTask: String]();
     var idToTask: [String: URLSessionTask] = [String: URLSessionTask]();
@@ -270,10 +272,13 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
         
         let headers = [String: String]()
         
-        OperationQueue.main.addOperation {
-            self.downloadListener.onProgress(taskId: taskId, headers: headers,
-                                        bytes: Int(totalBytesWritten),
-                                        total: Int(totalBytesExpectedToWrite))
+        if lastProgress.timeIntervalSinceNow > minimumDelay || totalBytesWritten == totalBytesExpectedToWrite {
+            OperationQueue.main.addOperation {
+                self.downloadListener.onProgress(taskId: taskId, headers: headers,
+                                             bytes: Int(totalBytesWritten),
+                                             total: Int(totalBytesExpectedToWrite))
+            }
+            lastProgress = Date()
         }
     }
     
@@ -366,10 +371,13 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
 
         let headers = [String: String]()
         
-        OperationQueue.main.addOperation {
-            self.uploadListener.onProgress(taskId: taskId, headers: headers,
-                                  bytes: Int(totalBytesSent),
-                                  total: Int(totalBytesExpectedToSend))
+        if lastProgress.timeIntervalSinceNow > minimumDelay || totalBytesSent == totalBytesExpectedToSend {
+            OperationQueue.main.addOperation {
+                self.uploadListener.onProgress(taskId: taskId, headers: headers,
+                                               bytes: Int(totalBytesSent),
+                                               total: Int(totalBytesExpectedToSend))
+            }
+            lastProgress = Date()
         }
     }
     
