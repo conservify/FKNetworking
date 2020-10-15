@@ -76,7 +76,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
         
         NSLog("[%@] http %@ %@", id, info.url!, info.methodOrDefault)
         
-        var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 60)
+        var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 10)
         req.httpMethod = info.methodOrDefault
         
         for (key, value) in info.headers {
@@ -184,7 +184,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
 
         let urlSession = URLSession(configuration: sessionConfig, delegate: self, delegateQueue: nil)
         
-        var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 60)
+        var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 10)
         req.httpMethod = info.methodOrDefault
         
         for (key, value) in info.headers {
@@ -338,7 +338,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
         let urlSession = URLSession(configuration: sessionConfig, delegate: self, delegateQueue: nil)
         
         let sourceURL = NSURL.fileURL(withPath: info.path!)
-        var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 60)
+        var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 10)
         req.httpMethod = info.methodOrDefault
         
         for (key, value) in info.headers {
