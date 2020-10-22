@@ -1,4 +1,4 @@
-//
+ //
 //  Web.swift
 //  AFNetworking
 //
@@ -100,8 +100,9 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
         let sessionConfig = URLSessionConfiguration.default
         if #available(iOS 11.0, *) {
             sessionConfig.waitsForConnectivity = true
-            sessionConfig.timeoutIntervalForResource = 60
+            sessionConfig.timeoutIntervalForResource = 10
         }
+        sessionConfig.timeoutIntervalForRequest = 10
 
         let task = URLSession(configuration: sessionConfig).dataTask(with: req) { (data, response, error) in
             NSLog("[%@] completed", id)
@@ -179,8 +180,9 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
         let sessionConfig = URLSessionConfiguration.default
         if #available(iOS 11.0, *) {
             sessionConfig.waitsForConnectivity = true
-            sessionConfig.timeoutIntervalForResource = 60
+            sessionConfig.timeoutIntervalForResource = 10
         }
+        sessionConfig.timeoutIntervalForRequest = 10
 
         let urlSession = URLSession(configuration: sessionConfig, delegate: self, delegateQueue: nil)
         
@@ -332,9 +334,10 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
         let sessionConfig = URLSessionConfiguration.default
         if #available(iOS 11.0, *) {
             sessionConfig.waitsForConnectivity = true
-            sessionConfig.timeoutIntervalForResource = 60
+            sessionConfig.timeoutIntervalForResource = 10
         }
-        
+        sessionConfig.timeoutIntervalForRequest = 10
+
         let urlSession = URLSession(configuration: sessionConfig, delegate: self, delegateQueue: nil)
         
         let sourceURL = NSURL.fileURL(withPath: info.path!)
