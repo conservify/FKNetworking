@@ -54,4 +54,5 @@ public protocol NetworkingListener {
     func onLostService(service: ServiceInfo)
     
     func onNetworkStatus(status: NetworkingStatus)
+    func onSimpleDiscovery(service: ServiceInfo)
 }

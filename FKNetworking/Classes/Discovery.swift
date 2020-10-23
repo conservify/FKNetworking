@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Network
 
 @objc
 open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
@@ -29,6 +30,47 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
         browser.delegate = self
         browser.stop()
         browser.searchForServices(ofType: serviceType, inDomain: "local.")
+
+        if #available(iOS 14.0, *) {
+            NSLog("ServiceDiscovery::iOS 14, listening udp");
+
+            DispatchQueue.global(qos: .background).async {
+                guard let multicast = try? NWMulticastGroup(for: [ .hostPort(host: "224.1.2.3", port: 22143) ]) else {
+                    NSLog("ServiceDiscovery: Error creating group")
+                    return
+                }
+
+                let group = NWConnectionGroup(with: multicast, using: .udp)
+                group.setReceiveHandler(maximumMessageSize: 16384, rejectOversizedMessages: true) { (message, content, isComplete) in
+                    var address = ""
+                    switch(message.remoteEndpoint) {
+                        case .hostPort(let host, _):
+                            address = "\(host)"
+                        default:
+                            NSLog("ServiceDiscovery: unexpected remote on udp")
+                            return
+                    }
+
+                    NSLog("ServiceDiscovery: received \(address)")
+
+                    guard let name = content?.base64EncodedString() else {
+                        NSLog("ServiceDiscovery: no data")
+                        return
+                    }
+
+                    DispatchQueue.main.async {
+                        let info = ServiceInfo(type: "udp", name: name, host: address, port: 80)
+                        self.networkingListener.onSimpleDiscovery(service: info)
+                    }
+                }
+
+                group.stateUpdateHandler = { (newState) in
+                    NSLog("ServiceDiscovery: Group entered state \(String(describing: newState))")
+                }
+
+                group.start(queue: .main)
+            }
+        }
     }
     
     @objc
