@@ -8,12 +8,78 @@
 import Foundation
 import Network
 
+protocol SimpleUDP {
+    func start();
+    func stop();
+}
+
+@available(iOS 14.00, *)
+class LatestSimpleUDP : SimpleUDP {
+    private var networkingListener: NetworkingListener
+    private var group: NWConnectionGroup?;
+    
+    init(networkingListener: NetworkingListener) {
+        self.networkingListener = networkingListener
+    }
+    
+    public func start() {
+        NSLog("ServiceDiscovery::iOS 14, listening udp");
+
+        DispatchQueue.global(qos: .background).async {
+            guard let multicast = try? NWMulticastGroup(for: [ .hostPort(host: "224.1.2.3", port: 22143) ]) else {
+                NSLog("ServiceDiscovery: error creating group")
+                return
+            }
+
+            let group = NWConnectionGroup(with: multicast, using: .udp)
+            group.setReceiveHandler(maximumMessageSize: 16384, rejectOversizedMessages: true) { (message, content, isComplete) in
+                var address = ""
+                switch(message.remoteEndpoint) {
+                    case .hostPort(let host, _):
+                        address = "\(host)"
+                    default:
+                        NSLog("ServiceDiscovery: unexpected remote on udp")
+                        return
+                }
+
+                NSLog("ServiceDiscovery: received \(address)")
+
+                guard let name = content?.base64EncodedString() else {
+                    NSLog("ServiceDiscovery: no data")
+                    return
+                }
+
+                DispatchQueue.main.async {
+                    let info = ServiceInfo(type: "udp", name: name, host: address, port: 80)
+                    self.networkingListener.onSimpleDiscovery(service: info)
+                }
+            }
+
+            group.stateUpdateHandler = { (newState) in
+                NSLog("ServiceDiscovery: group entered state \(String(describing: newState))")
+            }
+
+            group.start(queue: .main)
+            
+            self.group = group
+            
+            NSLog("ServiceDiscovery: simple udp running")
+        }
+    }
+    
+    public func stop() {
+        guard let g = self.group else { return }
+        g.cancel()
+        self.group = nil
+    }
+}
+
 @objc
 open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
     var networkingListener: NetworkingListener
     var browser: NetServiceBrowser
-    
     var pending: NetService?
+    var simple: SimpleUDP?
     
     @objc
     init(networkingListener: NetworkingListener) {
@@ -30,45 +96,11 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
         browser.delegate = self
         browser.stop()
         browser.searchForServices(ofType: serviceType, inDomain: "local.")
-
-        if #available(iOS 14.0, *) {
-            NSLog("ServiceDiscovery::iOS 14, listening udp");
-
-            DispatchQueue.global(qos: .background).async {
-                guard let multicast = try? NWMulticastGroup(for: [ .hostPort(host: "224.1.2.3", port: 22143) ]) else {
-                    NSLog("ServiceDiscovery: Error creating group")
-                    return
-                }
-
-                let group = NWConnectionGroup(with: multicast, using: .udp)
-                group.setReceiveHandler(maximumMessageSize: 16384, rejectOversizedMessages: true) { (message, content, isComplete) in
-                    var address = ""
-                    switch(message.remoteEndpoint) {
-                        case .hostPort(let host, _):
-                            address = "\(host)"
-                        default:
-                            NSLog("ServiceDiscovery: unexpected remote on udp")
-                            return
-                    }
-
-                    NSLog("ServiceDiscovery: received \(address)")
-
-                    guard let name = content?.base64EncodedString() else {
-                        NSLog("ServiceDiscovery: no data")
-                        return
-                    }
-
-                    DispatchQueue.main.async {
-                        let info = ServiceInfo(type: "udp", name: name, host: address, port: 80)
-                        self.networkingListener.onSimpleDiscovery(service: info)
-                    }
-                }
-
-                group.stateUpdateHandler = { (newState) in
-                    NSLog("ServiceDiscovery: Group entered state \(String(describing: newState))")
-                }
-
-                group.start(queue: .main)
+        
+        if #available(iOS 14.00, *) {
+            if simple == nil {
+                simple = LatestSimpleUDP(networkingListener: self.networkingListener)
+                simple!.start()
             }
         }
     }
