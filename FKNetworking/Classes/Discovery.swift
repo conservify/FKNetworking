@@ -44,14 +44,14 @@ class LatestSimpleUDP : SimpleUDP {
 
                 NSLog("ServiceDiscovery: received \(address)")
 
-                guard let name = content?.base64EncodedString() else {
+                guard let data = content?.base64EncodedString() else {
                     NSLog("ServiceDiscovery: no data")
                     return
                 }
 
                 DispatchQueue.main.async {
-                    let info = ServiceInfo(type: "udp", name: name, host: address, port: 80)
-                    self.networkingListener.onSimpleDiscovery(service: info)
+                    let message = UdpMessage(address: address, data: data)
+                    self.networkingListener.onUdpMessage(message: message)
                 }
             }
 

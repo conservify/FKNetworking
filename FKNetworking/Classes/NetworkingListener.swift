@@ -24,6 +24,18 @@ open class ServiceInfo : NSObject {
 }
 
 @objc
+open class UdpMessage : NSObject {
+    @objc public var address: String = ""
+    @objc public var data: String = ""
+    
+    @objc
+    public init(address: String, data: String) {
+        self.address = address
+        self.data = data
+    }
+}
+
+@objc
 open class WifiNetwork : NSObject {
     @objc public var ssid: String = ""
     
@@ -54,5 +66,5 @@ public protocol NetworkingListener {
     func onLostService(service: ServiceInfo)
     
     func onNetworkStatus(status: NetworkingStatus)
-    func onSimpleDiscovery(service: ServiceInfo)
+    func onUdpMessage(message: UdpMessage)
 }
