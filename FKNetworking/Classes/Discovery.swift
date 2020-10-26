@@ -80,6 +80,7 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
     var browser: NetServiceBrowser
     var pending: NetService?
     var simple: SimpleUDP?
+    var ourselves: NetService?
     
     @objc
     init(networkingListener: NetworkingListener) {
@@ -89,13 +90,19 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
     }
     
     @objc
-    public func start(serviceType: String) {
+    public func start(serviceTypeSearch: String, serviceNameSelf: String?, serviceTypeSelf: String?) {
         NSLog("ServiceDiscovery::starting");
-        NSLog(serviceType);
+        NSLog(serviceTypeSearch);
         pending = nil
         browser.delegate = self
         browser.stop()
-        browser.searchForServices(ofType: serviceType, inDomain: "local.")
+        browser.searchForServices(ofType: serviceTypeSearch, inDomain: "local.")
+        
+        if ourselves == nil && serviceNameSelf != nil && serviceTypeSelf != nil {
+            ourselves = NetService(domain: "local", type: serviceTypeSelf!, name: serviceNameSelf!, port: 80)
+            ourselves!.delegate = self
+            ourselves!.publish()
+        }
         
         if #available(iOS 14.00, *) {
             if simple == nil {
