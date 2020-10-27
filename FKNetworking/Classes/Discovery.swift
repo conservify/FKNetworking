@@ -99,9 +99,13 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
         browser.searchForServices(ofType: serviceTypeSearch, inDomain: "local.")
         
         if ourselves == nil && serviceNameSelf != nil && serviceTypeSelf != nil {
-            ourselves = NetService(domain: "local", type: serviceTypeSelf!, name: serviceNameSelf!, port: 80)
+            NSLog("ServiceDiscovery:registering self: name=%@ type=%@", serviceNameSelf!, serviceTypeSelf!)
+            ourselves = NetService(domain: "local.", type: serviceTypeSelf!, name: serviceNameSelf!, port: 80)
             ourselves!.delegate = self
             ourselves!.publish()
+        }
+        else {
+            NSLog("ServiceDiscovery:NOT registering self")
         }
         
         if #available(iOS 14.00, *) {
@@ -115,6 +119,19 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
     @objc
     public func stop() {
         browser.stop()
+    }
+    
+    public func netService(_ sender: NetService, didNotPublish errorDict: [String : NSNumber]) {
+        NSLog("ServiceDiscovery::didNotPublish: %@", sender.name)
+        NSLog("ServiceDiscovery::didNotPublish: %@", errorDict)
+    }
+    
+    public func netServiceWillPublish(_ sender: NetService) {
+        NSLog("ServiceDiscovery::netServiceWillPublish");
+    }
+    
+    public func netServiceDidPublish(_ sender: NetService) {
+        NSLog("ServiceDiscovery::netServiceDidPublish");
     }
     
     public func netServiceWillResolve(_ sender: NetService) {
