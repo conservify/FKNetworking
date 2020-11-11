@@ -21,6 +21,7 @@ open class WebTransfer : NSObject {
     @objc public var url: String? = nil
     @objc public var path: String? = nil
     @objc public var body: String? = nil
+    @objc public var uploadCopy: Bool = false
     @objc public var base64DecodeRequestBody: Bool = false
     @objc public var base64EncodeResponseBody: Bool = false
     @objc public var contentType: String? = nil
@@ -49,6 +50,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
     var idToTask: [String: URLSessionTask] = [String: URLSessionTask]();
     var transfers: [String: WebTransfer] = [String: WebTransfer]();
     var received: [String: Data] = [String: Data]();
+    var temps: [String: TemporaryFile] = [String: TemporaryFile]();
     
     var uploadListener: WebTransferListener
     var downloadListener: WebTransferListener
@@ -158,6 +160,11 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
             taskToId[task] = nil
             received[id] = nil
         }
+        if let temp = temps[id] {
+            temp.remove()
+            temps[id] = nil
+        }
+
     }
     
     @objc
@@ -331,6 +338,23 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
             return id
         }
         
+        var sourceURL = NSURL.fileURL(withPath: info.path!)
+        let temporary = TemporaryFile(beside: info.path!, extension: "uploading")
+        if info.uploadCopy {
+            NSLog("[%@] copying %@ to %@", id, sourceURL.absoluteString, temporary.url.absoluteString)
+            if !FileManager.default.secureCopyItem(at: sourceURL, to: temporary.url) {
+                NSLog("[%@] error copying", id)
+                uploadListener.onError(taskId: id, message: "copy error")
+                return id
+            }
+            temps[id] = temporary
+            sourceURL = temporary.url
+            NSLog("[%@] copied", id)
+        }
+        else {
+            NSLog("[%@] file ready", id)
+        }
+        
         let sessionConfig = URLSessionConfiguration.default
         if #available(iOS 11.0, *) {
             sessionConfig.waitsForConnectivity = true
@@ -409,5 +433,46 @@ extension HTTPURLResponse {
         }
         
         return headers
+    }
+}
+
+extension FileManager {
+    open func secureCopyItem(at srcURL: URL, to dstURL: URL) -> Bool {
+        do {
+            if FileManager.default.fileExists(atPath: dstURL.path) {
+                try FileManager.default.removeItem(at: dstURL)
+            }
+            try FileManager.default.copyItem(at: srcURL, to: dstURL)
+        } catch (let error) {
+            NSLog("error copying \(srcURL) to \(dstURL): \(error)")
+            return false
+        }
+        return true
+    }
+}
+
+public final class TemporaryFile {
+    public let url: URL
+
+    public init(beside besides: String, extension ext: String) {
+        let besidesUrl = URL(fileURLWithPath: besides)
+        let directory = besidesUrl.deletingLastPathComponent()
+
+        url = directory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension(ext)
+    }
+    
+    open func remove() {
+        NSLog("deleting temporary")
+        DispatchQueue.global(qos: .utility).async { [url = self.url] in
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
+    deinit {
+        /*
+        remove()
+        */
     }
 }
