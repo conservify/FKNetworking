@@ -187,13 +187,14 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
         let sessionConfig = URLSessionConfiguration.default
         if #available(iOS 11.0, *) {
             sessionConfig.waitsForConnectivity = true
-            sessionConfig.timeoutIntervalForResource = 10
+            // This applies to the entire transfer. Not what you want.
+            // sessionConfig.timeoutIntervalForResource = 10
         }
         sessionConfig.timeoutIntervalForRequest = 10
 
         let urlSession = URLSession(configuration: sessionConfig, delegate: self, delegateQueue: nil)
         
-        var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 10)
+        var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData/*, timeoutInterval: 10*/)
         req.httpMethod = info.methodOrDefault
         
         for (key, value) in info.headers {
@@ -358,14 +359,13 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
         let sessionConfig = URLSessionConfiguration.default
         if #available(iOS 11.0, *) {
             sessionConfig.waitsForConnectivity = true
-            sessionConfig.timeoutIntervalForResource = 10
+            // This applies to the entire transfer. Not what you want.
+            // sessionConfig.timeoutIntervalForResource = 10
         }
         sessionConfig.timeoutIntervalForRequest = 10
 
         let urlSession = URLSession(configuration: sessionConfig, delegate: self, delegateQueue: nil)
-        
-        let sourceURL = NSURL.fileURL(withPath: info.path!)
-        var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 10)
+        var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData/*, timeoutInterval: 10*/)
         req.httpMethod = info.methodOrDefault
         
         for (key, value) in info.headers {
