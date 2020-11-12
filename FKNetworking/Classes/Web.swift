@@ -353,7 +353,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
             NSLog("[%@] copied", id)
         }
         else {
-            NSLog("[%@] file ready", id)
+            NSLog("[%@] file ready %@", id, info.path!)
         }
         
         let sessionConfig = URLSessionConfiguration.default
