@@ -208,6 +208,17 @@ open class FileSystem : NSObject {
     }
     
     @objc
+    public func copyFile(source: String, destiny: String) -> Bool {
+        let sourceURL = NSURL.fileURL(withPath: source)
+        let destinyURL = NSURL.fileURL(withPath: destiny)
+        if !FileManager.default.secureCopyItem(at: sourceURL, to: destinyURL) {
+            NSLog("error copying %@ -> %@", source, destiny)
+            return false
+        }
+        return true
+    }
+    
+    @objc
     public func newToken() -> String {
         tokens += 1
         return "cfyfs-\(tokens)"
