@@ -101,7 +101,8 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
         
         let sessionConfig = URLSessionConfiguration.default
         if #available(iOS 11.0, *) {
-            sessionConfig.waitsForConnectivity = true
+            sessionConfig.waitsForConnectivity = false
+            // Remember that this applies to the entire duration of the request.
             sessionConfig.timeoutIntervalForResource = 10
         }
         sessionConfig.timeoutIntervalForRequest = 10
@@ -186,7 +187,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
 
         let sessionConfig = URLSessionConfiguration.default
         if #available(iOS 11.0, *) {
-            sessionConfig.waitsForConnectivity = true
+            sessionConfig.waitsForConnectivity = false
             // This applies to the entire transfer. Not what you want.
             // sessionConfig.timeoutIntervalForResource = 10
         }
@@ -358,7 +359,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
         
         let sessionConfig = URLSessionConfiguration.default
         if #available(iOS 11.0, *) {
-            sessionConfig.waitsForConnectivity = true
+            sessionConfig.waitsForConnectivity = false
             // This applies to the entire transfer. Not what you want.
             // sessionConfig.timeoutIntervalForResource = 10
         }
