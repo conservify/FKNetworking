@@ -51,7 +51,6 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
     var transfers: [String: WebTransfer] = [String: WebTransfer]();
     var received: [String: Data] = [String: Data]();
     var temps: [String: TemporaryFile] = [String: TemporaryFile]();
-    var backgroundCompletionHandler: (() -> Void)? = nil;
     var sessionId = "conservify-bg";
     
     var uploadListener: WebTransferListener
@@ -226,11 +225,6 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
             return downloadListener
         }
         return uploadListener
-    }
-    
-    public func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String, completionHandler: @escaping () -> Void) {
-        NSLog("[%@] handleEventsForBackgroundURLSession", identifier)
-        backgroundCompletionHandler = completionHandler
     }
     
     public func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
@@ -442,7 +436,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
     public func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
         NSLog("Web::urlSessionDidFinishEvents")
         DispatchQueue.main.async {
-            guard let appDelegate = UIApplication.shared.delegate as? Web,
+            guard let appDelegate = UIApplication.shared.delegate as? AppDelegate,
             let backgroundCompletionHandler = appDelegate.backgroundCompletionHandler else {
                 NSLog("Web::urlSessionDidFinishEvents: no handler")
                 return
