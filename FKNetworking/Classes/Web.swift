@@ -52,6 +52,8 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
     var received: [String: Data] = [String: Data]();
     var temps: [String: TemporaryFile] = [String: TemporaryFile]();
     var sessionId = "conservify-bg";
+    var sessionConfig: URLSessionConfiguration;
+    var urlSession: URLSession;
     
     var uploadListener: WebTransferListener
     var downloadListener: WebTransferListener
@@ -60,6 +62,19 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
     public init(uploadListener: WebTransferListener, downloadListener: WebTransferListener) {
         self.uploadListener = uploadListener
         self.downloadListener = downloadListener
+        
+        sessionConfig = URLSessionConfiguration.background(withIdentifier: sessionId)
+        sessionConfig.isDiscretionary = false
+        sessionConfig.sessionSendsLaunchEvents = true
+        if #available(iOS 11.0, *) {
+            sessionConfig.waitsForConnectivity = false
+            // This applies to the entire transfer. Not what you want.
+            // sessionConfig.timeoutIntervalForResource = 10
+        }
+        sessionConfig.timeoutIntervalForRequest = 10
+        
+        urlSession = URLSession(configuration: sessionConfig, delegate: self, delegateQueue: nil)
+        
         super.init()
     }
     
@@ -186,18 +201,6 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
             return id
         }
 
-        let sessionConfig = URLSessionConfiguration.background(withIdentifier: sessionId)
-        sessionConfig.isDiscretionary = false
-        sessionConfig.sessionSendsLaunchEvents = true
-        if #available(iOS 11.0, *) {
-            sessionConfig.waitsForConnectivity = false
-            // This applies to the entire transfer. Not what you want.
-            // sessionConfig.timeoutIntervalForResource = 10
-        }
-        sessionConfig.timeoutIntervalForRequest = 10
-
-        let urlSession = URLSession(configuration: sessionConfig, delegate: self, delegateQueue: nil)
-        
         var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData/*, timeoutInterval: 10*/)
         req.httpMethod = info.methodOrDefault
         
@@ -362,18 +365,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
         else {
             NSLog("[%@] file ready %@", id, info.path!)
         }
-        
-        let sessionConfig = URLSessionConfiguration.background(withIdentifier: sessionId)
-        sessionConfig.isDiscretionary = false
-        sessionConfig.sessionSendsLaunchEvents = true
-        if #available(iOS 11.0, *) {
-            sessionConfig.waitsForConnectivity = false
-            // This applies to the entire transfer. Not what you want.
-            // sessionConfig.timeoutIntervalForResource = 10
-        }
-        sessionConfig.timeoutIntervalForRequest = 10
 
-        let urlSession = URLSession(configuration: sessionConfig, delegate: self, delegateQueue: nil)
         var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData/*, timeoutInterval: 10*/)
         req.httpMethod = info.methodOrDefault
         
