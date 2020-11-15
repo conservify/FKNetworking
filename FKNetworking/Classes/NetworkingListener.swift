@@ -60,6 +60,7 @@ open class NetworkingStatus : NSObject {
 @objc
 public protocol NetworkingListener {
     func onStarted()
+    func onStopped()
     
     func onDiscoveryFailed()
     func onFoundService(service: ServiceInfo)

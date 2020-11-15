@@ -117,14 +117,22 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
         if #available(iOS 14.00, *) {
             if simple == nil {
                 simple = LatestSimpleUDP(networkingListener: self.networkingListener)
-                simple!.start()
+                simple?.start()
             }
         }
     }
 
     @objc
     public func stop() {
+        NSLog("ServiceDiscovery::stop")
         browser.stop()
+        if #available(iOS 14.00, *) {
+            if simple != nil {
+                simple?.stop()
+                simple = nil
+            }
+        }
+        networkingListener.onStopped()
     }
 
     public func netService(_ sender: NetService, didNotPublish errorDict: [String : NSNumber]) {
@@ -162,7 +170,6 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
 
     public func netServiceBrowserWillSearch(_ browser: NetServiceBrowser) {
         NSLog("ServiceDiscovery::willSearch")
-
         networkingListener.onStarted()
     }
 
