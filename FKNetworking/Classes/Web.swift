@@ -51,6 +51,8 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
     var transfers: [String: WebTransfer] = [String: WebTransfer]();
     var received: [String: Data] = [String: Data]();
     var temps: [String: TemporaryFile] = [String: TemporaryFile]();
+    var backgroundCompletionHandler: (() -> Void)? = nil;
+    var sessionId = "conservify-bg";
     
     var uploadListener: WebTransferListener
     var downloadListener: WebTransferListener
@@ -62,12 +64,12 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
         super.init()
     }
     
-    func newToken() -> String {
+    private func newToken() -> String {
         tokens += 1
         return "cfynw-\(tokens)"
     }
     
-    func basic(info: WebTransfer) -> String {
+    public func basic(info: WebTransfer) -> String {
         let id = info.id
         
         guard let url = URL(string: info.url!) else {
@@ -111,23 +113,23 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
             NSLog("[%@] completed", id)
 
             if error != nil {
-                NSLog("error: %@", error!.localizedDescription)
+                NSLog("Web::error: %@", error!.localizedDescription)
                 self.downloadListener.onError(taskId: id, message: error!.localizedDescription)
             }
             else {
                 if let httpResponse = response as? HTTPURLResponse {
                     guard let data = data else { return }
 
-                    NSLog("data: %@", data.debugDescription)
+                    NSLog("Web::data: %@", data.debugDescription)
                     
                     var body: String?
                     if info.base64EncodeResponseBody {
                         body = String(data: data.base64EncodedData(), encoding: .utf8)
-                        NSLog("encoded body: %@", body!)
+                        NSLog("Web::encoded body: %@", body!)
                     }
                     else {
                         body = String(data: data, encoding: .utf8)
-                        NSLog("string body: %@", body!)
+                        NSLog("Web::string body: %@", body!)
                     }
                     
                     let contentType = httpResponse.allHeaderFields["Content-Type"] as? String
@@ -154,7 +156,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
         return id
     }
     
-    func cleanup(id: String) {
+    private func cleanup(id: String) {
         if let task = idToTask[id] {
             transfers[id] = nil
             idToTask[id] = nil
@@ -185,7 +187,9 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
             return id
         }
 
-        let sessionConfig = URLSessionConfiguration.default
+        let sessionConfig = URLSessionConfiguration.background(withIdentifier: sessionId)
+        sessionConfig.isDiscretionary = false
+        sessionConfig.sessionSendsLaunchEvents = true
         if #available(iOS 11.0, *) {
             sessionConfig.waitsForConnectivity = false
             // This applies to the entire transfer. Not what you want.
@@ -203,7 +207,10 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
         }
         
         let task = urlSession.downloadTask(with: req)
-        
+        // task.earliestBeginDate = Date().addingTimeInterval(60 * 60)
+        // task.countOfBytesClientExpectsToSend = 200
+        // task.countOfBytesClientExpectsToReceive = 500 * 1024
+
         received[id] = Data()
         transfers[id] = info
         taskToId[task] = id
@@ -214,16 +221,21 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
         return id
     }
     
-    func getListenerFor(task: URLSessionTask) -> WebTransferListener {
+    private func getListenerFor(task: URLSessionTask) -> WebTransferListener {
         if task is URLSessionDownloadTask {
             return downloadListener
         }
         return uploadListener
     }
     
+    public func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String, completionHandler: @escaping () -> Void) {
+        NSLog("[%@] handleEventsForBackgroundURLSession", identifier)
+        backgroundCompletionHandler = completionHandler
+    }
+    
     public func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         guard let taskId = taskToId[task] else {
-            NSLog("download done for unknown task")
+            NSLog("Web::download done for unknown task")
             return
         }
         
@@ -234,7 +246,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
         
         if error == nil {
             guard let httpResponse = task.response as? HTTPURLResponse else {
-                NSLog("download done w/o HTTPURLResponse?")
+                NSLog("Web::download done w/o HTTPURLResponse?")
                 return
             }
             
@@ -245,11 +257,11 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
             var body: String?
             if taskInfo.base64EncodeResponseBody {
                 body = String(data: response.base64EncodedData(), encoding: .utf8)
-                NSLog("encoded body: %@", body!)
+                NSLog("Web::encoded body: %@", body!)
             }
             else {
                 body = String(data: response, encoding: .utf8)
-                NSLog("string body: %@", body!)
+                NSLog("Web::string body: %@", body!)
             }
             
             OperationQueue.main.addOperation {
@@ -261,7 +273,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
             }
         }
         else {
-            NSLog("download error: %@", error!.localizedDescription)
+            NSLog("Web::download error: %@", error!.localizedDescription)
             
             OperationQueue.main.addOperation {
                 listener.onError(taskId: taskId, message: error!.localizedDescription)
@@ -274,10 +286,10 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
     public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
                            didWriteData bytesWritten: Int64, totalBytesWritten: Int64,
                            totalBytesExpectedToWrite: Int64) {
-        NSLog("download progress: %d %d", totalBytesWritten, totalBytesExpectedToWrite)
+        NSLog("Web::download progress: %d %d", totalBytesWritten, totalBytesExpectedToWrite)
         
         guard let taskId = taskToId[downloadTask] else {
-            NSLog("download progress for unknown task?")
+            NSLog("Web::download progress for unknown task?")
             return
         }
         
@@ -295,7 +307,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
     
     public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
         guard let taskId = taskToId[downloadTask] else {
-            NSLog("download done for unknown task")
+            NSLog("Web::download done for unknown task")
             return
         }
         
@@ -357,7 +369,9 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
             NSLog("[%@] file ready %@", id, info.path!)
         }
         
-        let sessionConfig = URLSessionConfiguration.default
+        let sessionConfig = URLSessionConfiguration.background(withIdentifier: sessionId)
+        sessionConfig.isDiscretionary = false
+        sessionConfig.sessionSendsLaunchEvents = true
         if #available(iOS 11.0, *) {
             sessionConfig.waitsForConnectivity = false
             // This applies to the entire transfer. Not what you want.
@@ -374,6 +388,9 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
         }
         
         let task = urlSession.uploadTask(with: req, fromFile: sourceURL)
+        // task.earliestBeginDate = Date().addingTimeInterval(60 * 60)
+        // task.countOfBytesClientExpectsToSend = 200
+        // task.countOfBytesClientExpectsToReceive = 500 * 1024
         
         received[id] = Data()
         transfers[id] = info
@@ -390,10 +407,10 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
                     didSendBodyData bytesSent: Int64,
                     totalBytesSent: Int64,
                     totalBytesExpectedToSend: Int64) {
-        NSLog("upload progress: %d %d", totalBytesSent, totalBytesExpectedToSend)
+        NSLog("Web::upload progress: %d %d", totalBytesSent, totalBytesExpectedToSend)
         
         guard let taskId = taskToId[task] else {
-            NSLog("upload progress for unknown task?")
+            NSLog("Web::upload progress for unknown task?")
             return
         }
 
@@ -411,7 +428,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
     
     public func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
         guard let taskId = taskToId[dataTask] else {
-            NSLog("transfer done for unknown task")
+            NSLog("Web::transfer done for unknown task")
             return
         }
         
@@ -420,6 +437,19 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
         NSLog("[%@] transfer received data (%d)", taskId, data.count)
         
         received[taskId]!.append(data)
+    }
+    
+    public func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
+        NSLog("Web::urlSessionDidFinishEvents")
+        DispatchQueue.main.async {
+            guard let appDelegate = UIApplication.shared.delegate as? Web,
+            let backgroundCompletionHandler = appDelegate.backgroundCompletionHandler else {
+                NSLog("Web::urlSessionDidFinishEvents: no handler")
+                return
+            }
+            NSLog("Web::urlSessionDidFinishEvents: calling handler")
+            backgroundCompletionHandler()
+        }
     }
 }
 
