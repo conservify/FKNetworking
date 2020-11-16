@@ -53,7 +53,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
     var temps: [String: TemporaryFile] = [String: TemporaryFile]();
     var sessionId = "conservify-bg";
     var sessionConfig: URLSessionConfiguration;
-    var urlSession: URLSession;
+    var urlSession: URLSession?;
     
     var uploadListener: WebTransferListener
     var downloadListener: WebTransferListener
@@ -62,7 +62,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
     public init(uploadListener: WebTransferListener, downloadListener: WebTransferListener) {
         self.uploadListener = uploadListener
         self.downloadListener = downloadListener
-        
+
         sessionConfig = URLSessionConfiguration.background(withIdentifier: sessionId)
         sessionConfig.isDiscretionary = false
         sessionConfig.sessionSendsLaunchEvents = true
@@ -73,9 +73,9 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
         }
         sessionConfig.timeoutIntervalForRequest = 10
         
-        urlSession = URLSession(configuration: sessionConfig, delegate: self, delegateQueue: nil)
-        
         super.init()
+
+        urlSession = URLSession(configuration: sessionConfig, delegate: self, delegateQueue: nil)
     }
     
     private func newToken() -> String {
@@ -208,7 +208,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
             req.addValue(value, forHTTPHeaderField: key)
         }
         
-        let task = urlSession.downloadTask(with: req)
+        let task = urlSession!.downloadTask(with: req)
         // task.earliestBeginDate = Date().addingTimeInterval(60 * 60)
         // task.countOfBytesClientExpectsToSend = 200
         // task.countOfBytesClientExpectsToReceive = 500 * 1024
@@ -373,7 +373,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
             req.addValue(value, forHTTPHeaderField: key)
         }
         
-        let task = urlSession.uploadTask(with: req, fromFile: sourceURL)
+        let task = urlSession!.uploadTask(with: req, fromFile: sourceURL)
         // task.earliestBeginDate = Date().addingTimeInterval(60 * 60)
         // task.countOfBytesClientExpectsToSend = 200
         // task.countOfBytesClientExpectsToReceive = 500 * 1024
@@ -480,7 +480,7 @@ public final class TemporaryFile {
             .appendingPathExtension(ext)
     }
     
-    open func remove() {
+    func remove() {
         NSLog("deleting temporary")
         DispatchQueue.global(qos: .utility).async { [url = self.url] in
             try? FileManager.default.removeItem(at: url)
