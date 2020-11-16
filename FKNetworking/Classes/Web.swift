@@ -44,7 +44,7 @@ open class WebTransfer : NSObject {
 @objc
 open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSessionDataDelegate {
     var lastProgress: Date = Date.distantPast
-    var minimumDelay: TimeInterval = 0.5
+    var minimumDelay: TimeInterval = 0.25
     var tokens: UInt64 = 0
     var taskToId: [URLSessionTask: String] = [URLSessionTask: String]();
     var idToTask: [String: URLSessionTask] = [String: URLSessionTask]();
@@ -283,7 +283,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
     public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
                            didWriteData bytesWritten: Int64, totalBytesWritten: Int64,
                            totalBytesExpectedToWrite: Int64) {
-        NSLog("Web::download progress: %d %d", totalBytesWritten, totalBytesExpectedToWrite)
+        NSLog("Web::download progress: %d %d %f", totalBytesWritten, totalBytesExpectedToWrite, lastProgress.timeIntervalSinceNow)
         
         guard let taskId = taskToId[downloadTask] else {
             NSLog("Web::download progress for unknown task?")
@@ -292,7 +292,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
         
         let headers = [String: String]()
         
-        if lastProgress.timeIntervalSinceNow > minimumDelay || totalBytesWritten == totalBytesExpectedToWrite {
+        if -lastProgress.timeIntervalSinceNow > minimumDelay || totalBytesWritten == totalBytesExpectedToWrite {
             OperationQueue.main.addOperation {
                 self.downloadListener.onProgress(taskId: taskId, headers: headers,
                                              bytes: Int(totalBytesWritten),
