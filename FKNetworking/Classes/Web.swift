@@ -283,7 +283,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
     public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
                            didWriteData bytesWritten: Int64, totalBytesWritten: Int64,
                            totalBytesExpectedToWrite: Int64) {
-        NSLog("Web::download progress: %d %d %f", totalBytesWritten, totalBytesExpectedToWrite, lastProgress.timeIntervalSinceNow)
+        NSLog("Web::download progress: wrote=%d total=%d lp=%f", totalBytesWritten, totalBytesExpectedToWrite, lastProgress.timeIntervalSinceNow)
         
         guard let taskId = taskToId[downloadTask] else {
             NSLog("Web::download progress for unknown task?")
@@ -393,7 +393,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
                     didSendBodyData bytesSent: Int64,
                     totalBytesSent: Int64,
                     totalBytesExpectedToSend: Int64) {
-        NSLog("Web::upload progress: %d %d", totalBytesSent, totalBytesExpectedToSend)
+        NSLog("Web::upload progress: wrote=%d total=%d lp=%f", totalBytesSent, totalBytesExpectedToSend, lastProgress.timeIntervalSinceNow)
         
         guard let taskId = taskToId[task] else {
             NSLog("Web::upload progress for unknown task?")
@@ -402,7 +402,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
 
         let headers = [String: String]()
         
-        if lastProgress.timeIntervalSinceNow > minimumDelay || totalBytesSent == totalBytesExpectedToSend {
+        if -lastProgress.timeIntervalSinceNow > minimumDelay || totalBytesSent == totalBytesExpectedToSend {
             OperationQueue.main.addOperation {
                 self.uploadListener.onProgress(taskId: taskId, headers: headers,
                                                bytes: Int(totalBytesSent),
