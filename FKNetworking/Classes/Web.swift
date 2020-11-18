@@ -1,45 +1,4 @@
-//
-//  Web.swift
-//  AFNetworking
-//
-//  Created by Jacob Lewallen on 10/30/19.
-//
-
 import Foundation
-
-var tokens: UInt64 = 0
-
-func newToken() -> String {
-    tokens += 1
-    return "cfynw-\(tokens)"
-}
-
-@objc
-open class WebTransfer : NSObject {
-    @objc public var id: String = newToken()
-    @objc public var method: String? = nil
-    @objc public var url: String? = nil
-    @objc public var path: String? = nil
-    @objc public var body: String? = nil
-    @objc public var uploadCopy: Bool = false
-    @objc public var base64DecodeRequestBody: Bool = false
-    @objc public var base64EncodeResponseBody: Bool = false
-    @objc public var contentType: String? = nil
-    @objc public var headers: [String: String] = [String:String]()
-    
-    @objc public func header(key: String, value: String) -> WebTransfer {
-        headers[key] = value
-        return self
-    }
-    
-    @objc public var methodOrDefault: String {
-        return method ?? "GET"
-    }
-    
-    @objc public var isGET: Bool {
-        return methodOrDefault == "GET"
-    }
-}
 
 @objc
 open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSessionDataDelegate {
@@ -465,31 +424,5 @@ extension FileManager {
             return false
         }
         return true
-    }
-}
-
-public final class TemporaryFile {
-    public let url: URL
-
-    public init(beside besides: String, extension ext: String) {
-        let besidesUrl = URL(fileURLWithPath: besides)
-        let directory = besidesUrl.deletingLastPathComponent()
-
-        url = directory
-            .appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension(ext)
-    }
-    
-    func remove() {
-        NSLog("deleting temporary")
-        DispatchQueue.global(qos: .utility).async { [url = self.url] in
-            try? FileManager.default.removeItem(at: url)
-        }
-    }
-
-    deinit {
-        /*
-        remove()
-        */
     }
 }
