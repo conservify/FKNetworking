@@ -38,7 +38,7 @@ class LatestSimpleUDP : SimpleUDP {
             }
 
             let group = NWConnectionGroup(with: multicast, using: .udp)
-            group.setReceiveHandler(maximumMessageSize: 16384, rejectOversizedMessages: true) { (message, content, isComplete) in
+            group.setReceiveHandler(maximumMessageSize: 1024, rejectOversizedMessages: true) { (message, content, isComplete) in
                 var address = ""
                 switch(message.remoteEndpoint) {
                     case .hostPort(let host, _):
