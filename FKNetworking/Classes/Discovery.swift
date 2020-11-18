@@ -7,6 +7,7 @@
 
 import Foundation
 import Network
+import SystemConfiguration
 
 let UdpMulticastGroup = "224.1.2.3";
 let UdpPort = 22143;
@@ -21,6 +22,7 @@ protocol SimpleUDP {
 class LatestSimpleUDP : SimpleUDP {
     private var networkingListener: NetworkingListener
     private var group: NWConnectionGroup?;
+    var monitor: NWPathMonitor?
 
     init(networkingListener: NetworkingListener) {
         self.networkingListener = networkingListener
@@ -28,15 +30,37 @@ class LatestSimpleUDP : SimpleUDP {
 
     public func start() {
         NSLog("ServiceDiscovery::listening udp");
+        
+        monitor = NWPathMonitor()
 
-        let endpoint = NWEndpoint.hostPort(host: NWEndpoint.Host(UdpMulticastGroup),
-                                           port: NWEndpoint.Port(rawValue: UInt16(UdpPort))!)
+        monitor?.pathUpdateHandler = { path in
+            NSLog("ServiceDiscovery::path-updated: \(String(describing: path))")
+            
+            if let ifaces = self.monitor?.currentPath.availableInterfaces {
+                for iface in ifaces {
+                    NSLog("ServiceDiscovery::iface \(String(describing: iface))")
+                }
+            }
+        }
+        
+        /*
+        for interface in SCNetworkInterfaceCopyAll() as NSArray {
+            if let name = SCNetworkInterfaceGetBSDName(interface as! SCNetworkInterface),
+               let type = SCNetworkInterfaceGetInterfaceType(interface as! SCNetworkInterface) {
+                
+            }
+        }
+        */
+        
         DispatchQueue.global(qos: .background).async {
+            let endpoint = NWEndpoint.hostPort(host: NWEndpoint.Host(UdpMulticastGroup),
+                                               port: NWEndpoint.Port(rawValue: UInt16(UdpPort))!)
+            
             guard let multicast = try? NWMulticastGroup(for: [endpoint]) else {
                 NSLog("ServiceDiscovery::error creating group (FATAL)")
                 return
             }
-
+            
             let group = NWConnectionGroup(with: multicast, using: .udp)
             group.setReceiveHandler(maximumMessageSize: 1024, rejectOversizedMessages: true) { (message, content, isComplete) in
                 var address = ""
@@ -64,8 +88,10 @@ class LatestSimpleUDP : SimpleUDP {
             group.stateUpdateHandler = { (newState) in
                 NSLog("ServiceDiscovery::group entered state \(String(describing: newState))")
             }
-
+            
             group.start(queue: .main)
+            
+            self.monitor?.start(queue: .main)
 
             self.group = group
 
@@ -74,6 +100,11 @@ class LatestSimpleUDP : SimpleUDP {
     }
 
     public func stop() {
+        NSLog("ServiceDiscovery::stopping")
+        if monitor != nil {
+            monitor?.cancel()
+            monitor = nil
+        }
         guard let g = self.group else { return }
         g.cancel()
         self.group = nil
@@ -125,12 +156,12 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
             }
             else {
                 NSLog("ServiceDiscovery::udp already running")
+            }
         }
-    }
         else {
             NSLog("ServiceDiscovery:udp unavailable")
         }
-        }
+    }
 
     @objc
     public func stop() {
