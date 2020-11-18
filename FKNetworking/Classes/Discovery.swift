@@ -88,12 +88,14 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
     var pending: NetService?
     var simple: SimpleUDP?
     var ourselves: NetService?
-    var appDelegate: AppDelegate?
+    var appDelegate: AppDelegate
 
     @objc
     init(networkingListener: NetworkingListener) {
         self.networkingListener = networkingListener
         self.browser = NetServiceBrowser()
+        self.appDelegate = AppDelegate()
+        UIApplication.shared.delegate = appDelegate
         super.init()
     }
 
@@ -105,9 +107,6 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
         browser.stop()
         browser.searchForServices(ofType: serviceTypeSearch, inDomain: DefaultLocalDomain)
         
-        appDelegate = AppDelegate()
-        UIApplication.shared.delegate = appDelegate
-
         if ourselves == nil && serviceNameSelf != nil && serviceTypeSelf != nil {
             NSLog("ServiceDiscovery::registering self: name=%@ type=%@", serviceNameSelf!, serviceTypeSelf!)
             ourselves = NetService(domain: DefaultLocalDomain, type: serviceTypeSelf!, name: serviceNameSelf!, port: Int32(UdpPort))
