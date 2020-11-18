@@ -113,6 +113,18 @@ class LatestSimpleUDP : SimpleUDP {
 }
 
 @objc
+open class DiscoveryStartOptions : NSObject {
+    @objc public var serviceTypeSearch: String? = nil
+    @objc public var serviceNameSelf: String? = nil
+    @objc public var serviceTypeSelf: String? = nil
+}
+
+@objc
+open class DiscoveryStopOptions : NSObject {
+    @objc public var suspending: Bool = false
+}
+
+@objc
 open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
     var networkingListener: NetworkingListener
     var browser: NetServiceBrowser
@@ -131,18 +143,31 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
     }
 
     @objc
-    public func start(serviceTypeSearch: String, serviceNameSelf: String?, serviceTypeSelf: String?) {
-        NSLog("ServiceDiscovery::starting: %@", serviceTypeSearch);
-        pending = nil
-        browser.delegate = self
-        browser.stop()
-        browser.searchForServices(ofType: serviceTypeSearch, inDomain: DefaultLocalDomain)
+    public func start(options: DiscoveryStartOptions) {
+        NSLog("ServiceDiscovery::starting");
         
-        if ourselves == nil && serviceNameSelf != nil && serviceTypeSelf != nil {
-            NSLog("ServiceDiscovery::registering self: name=%@ type=%@", serviceNameSelf!, serviceTypeSelf!)
-            ourselves = NetService(domain: DefaultLocalDomain, type: serviceTypeSelf!, name: serviceNameSelf!, port: Int32(UdpPort))
-            ourselves!.delegate = self
-            ourselves!.publish()
+        // Clear any pending resolve. Allows them to be freed, as well.
+        pending = nil
+        
+        // If given a type to search for, start listening.
+        if let name = options.serviceTypeSearch {
+            NSLog("ServiceDiscovery::searching: %@", name);
+            browser.delegate = self
+            browser.stop()
+            browser.searchForServices(ofType: name, inDomain: DefaultLocalDomain)
+        }
+        
+        if let nameSelf = options.serviceNameSelf,
+           let typeSelf = options.serviceTypeSelf {
+            if ourselves == nil {
+                NSLog("ServiceDiscovery::registering self: name=%@ type=%@", nameSelf, typeSelf)
+                ourselves = NetService(domain: DefaultLocalDomain, type: typeSelf, name: nameSelf, port: Int32(UdpPort))
+                ourselves!.delegate = self
+                ourselves!.publish()
+            }
+            else {
+                NSLog("ServiceDiscovery::already registered")
+            }
         }
         else {
             NSLog("ServiceDiscovery::NOT registering self")
@@ -161,18 +186,24 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
         else {
             NSLog("ServiceDiscovery:udp unavailable")
         }
+        
+        NSLog("ServiceDiscovery::started, waiting");
     }
 
     @objc
-    public func stop() {
-        NSLog("ServiceDiscovery::stop")
+    public func stop(options: DiscoveryStopOptions) {
+        NSLog("ServiceDiscovery::stopping")
+        
+        // We call this no matter what, now even if we never registered.
         browser.stop()
+        
         if #available(iOS 14.00, *) {
-            if false && simple != nil {
+            if !options.suspending && simple != nil {
                 simple?.stop()
                 simple = nil
             }
         }
+        
         NSLog("ServiceDiscovery::stopped")
         networkingListener.onStopped()
     }
