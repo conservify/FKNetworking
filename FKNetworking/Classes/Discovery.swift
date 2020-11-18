@@ -168,7 +168,7 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
         NSLog("ServiceDiscovery::stop")
         browser.stop()
         if #available(iOS 14.00, *) {
-            if simple != nil {
+            if false && simple != nil {
                 simple?.stop()
                 simple = nil
             }
