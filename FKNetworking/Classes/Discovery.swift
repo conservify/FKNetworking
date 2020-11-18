@@ -1,135 +1,13 @@
-//
-//  Discovery.swift
-//  AFNetworking
-//
-//  Created by Jacob Lewallen on 10/30/19.
-//
-
 import Foundation
 import Network
 import SystemConfiguration
-
-let UdpMulticastGroup = "224.1.2.3";
-let UdpPort = 22143;
-let DefaultLocalDomain = "local."
-
-protocol SimpleUDP {
-    func start();
-    func stop();
-}
-
-@available(iOS 14.00, *)
-class LatestSimpleUDP : SimpleUDP {
-    private var networkingListener: NetworkingListener
-    private var group: NWConnectionGroup?;
-    var monitor: NWPathMonitor?
-
-    init(networkingListener: NetworkingListener) {
-        self.networkingListener = networkingListener
-    }
-
-    public func start() {
-        NSLog("ServiceDiscovery::listening udp");
-        
-        monitor = NWPathMonitor()
-
-        monitor?.pathUpdateHandler = { path in
-            NSLog("ServiceDiscovery::path-updated: \(String(describing: path))")
-            
-            if let ifaces = self.monitor?.currentPath.availableInterfaces {
-                for iface in ifaces {
-                    NSLog("ServiceDiscovery::iface \(String(describing: iface))")
-                }
-            }
-        }
-        
-        /*
-        for interface in SCNetworkInterfaceCopyAll() as NSArray {
-            if let name = SCNetworkInterfaceGetBSDName(interface as! SCNetworkInterface),
-               let type = SCNetworkInterfaceGetInterfaceType(interface as! SCNetworkInterface) {
-                
-            }
-        }
-        */
-        
-        DispatchQueue.global(qos: .background).async {
-            let endpoint = NWEndpoint.hostPort(host: NWEndpoint.Host(UdpMulticastGroup),
-                                               port: NWEndpoint.Port(rawValue: UInt16(UdpPort))!)
-            
-            guard let multicast = try? NWMulticastGroup(for: [endpoint]) else {
-                NSLog("ServiceDiscovery::error creating group (FATAL)")
-                return
-            }
-            
-            let group = NWConnectionGroup(with: multicast, using: .udp)
-            group.setReceiveHandler(maximumMessageSize: 1024, rejectOversizedMessages: true) { (message, content, isComplete) in
-                var address = ""
-                switch(message.remoteEndpoint) {
-                    case .hostPort(let host, _):
-                        address = "\(host)"
-                    default:
-                        NSLog("ServiceDiscovery::unexpected remote on udp")
-                        return
-                }
-
-                NSLog("ServiceDiscovery::received \(address)")
-
-                guard let data = content?.base64EncodedString() else {
-                    NSLog("ServiceDiscovery::no data")
-                    return
-                }
-
-                DispatchQueue.main.async {
-                    let message = UdpMessage(address: address, data: data)
-                    self.networkingListener.onUdpMessage(message: message)
-                }
-            }
-
-            group.stateUpdateHandler = { (newState) in
-                NSLog("ServiceDiscovery::group entered state \(String(describing: newState))")
-            }
-            
-            group.start(queue: .main)
-            
-            self.monitor?.start(queue: .main)
-
-            self.group = group
-
-            NSLog("ServiceDiscovery::udp running")
-        }
-    }
-
-    public func stop() {
-        NSLog("ServiceDiscovery::stopping")
-        if monitor != nil {
-            monitor?.cancel()
-            monitor = nil
-        }
-        guard let g = self.group else { return }
-        g.cancel()
-        self.group = nil
-        NSLog("ServiceDiscovery::stopped")
-    }
-}
-
-@objc
-open class DiscoveryStartOptions : NSObject {
-    @objc public var serviceTypeSearch: String? = nil
-    @objc public var serviceNameSelf: String? = nil
-    @objc public var serviceTypeSelf: String? = nil
-}
-
-@objc
-open class DiscoveryStopOptions : NSObject {
-    @objc public var suspending: Bool = false
-}
 
 @objc
 open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
     var networkingListener: NetworkingListener
     var browser: NetServiceBrowser
     var pending: NetService?
-    var simple: SimpleUDP?
+    var udpGroup: SimpleListener?
     var ourselves: NetService?
     var appDelegate: AppDelegate
 
@@ -151,7 +29,7 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
         
         // If given a type to search for, start listening.
         if let name = options.serviceTypeSearch {
-            NSLog("ServiceDiscovery::searching: %@", name);
+            NSLog("ServiceDiscovery::searching %@", name);
             browser.delegate = self
             browser.stop()
             browser.searchForServices(ofType: name, inDomain: DefaultLocalDomain)
@@ -160,24 +38,24 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
         if let nameSelf = options.serviceNameSelf,
            let typeSelf = options.serviceTypeSelf {
             if ourselves == nil {
-                NSLog("ServiceDiscovery::registering self: name=%@ type=%@", nameSelf, typeSelf)
+                NSLog("ServiceDiscovery::publishing self: name=%@ type=%@", nameSelf, typeSelf)
                 ourselves = NetService(domain: DefaultLocalDomain, type: typeSelf, name: nameSelf, port: Int32(UdpPort))
                 ourselves!.delegate = self
                 ourselves!.publish()
             }
             else {
-                NSLog("ServiceDiscovery::already registered")
+                NSLog("ServiceDiscovery::publishing already registered")
             }
         }
         else {
-            NSLog("ServiceDiscovery::NOT registering self")
+            NSLog("ServiceDiscovery::publishing disabled")
         }
 
         if #available(iOS 14.00, *) {
-            if simple == nil {
-                NSLog("ServiceDiscovery::starting udp")
-                simple = LatestSimpleUDP(networkingListener: self.networkingListener)
-                simple?.start()
+            if udpGroup == nil {
+                NSLog("ServiceDiscovery::udp starting")
+                udpGroup = MulticastUDP(networkingListener: self.networkingListener)
+                udpGroup?.start()
             }
             else {
                 NSLog("ServiceDiscovery::udp already running")
@@ -187,23 +65,47 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
             NSLog("ServiceDiscovery:udp unavailable")
         }
         
-        NSLog("ServiceDiscovery::started, waiting");
+        NSLog("ServiceDiscovery::started");
     }
 
     @objc
     public func stop(options: DiscoveryStopOptions) {
         NSLog("ServiceDiscovery::stopping")
         
-        // We call this no matter what, now even if we never registered.
-        browser.stop()
-        
-        if #available(iOS 14.00, *) {
-            if !options.suspending && simple != nil {
-                simple?.stop()
-                simple = nil
+        if options.mdns {
+            // We call this no matter what, now even if we never registered.
+            NSLog("ServiceDiscovery(stop)::searching stopping")
+            browser.stop()
+            
+            // This is optional.
+            if ourselves != nil {
+                NSLog("ServiceDiscovery(stop)::publishing stop")
+                ourselves?.stop()
+                ourselves = nil
+            }
+            else {
+                NSLog("ServiceDiscovery(stop)::publishing disabled")
             }
         }
         
+        if options.dns {
+            if #available(iOS 14.00, *) {
+                if udpGroup != nil {
+                    if !options.suspending {
+                        NSLog("ServiceDiscovery(stop)::udp stopping")
+                        udpGroup?.stop()
+                        udpGroup = nil
+                    }
+                    else {
+                        NSLog("ServiceDiscovery(stop)::udp staying running")
+                    }
+                }
+            }
+            else {
+                NSLog("ServiceDiscovery(stop)::udp unavailable")
+            }
+        }
+
         NSLog("ServiceDiscovery::stopped")
         networkingListener.onStopped()
     }
