@@ -27,13 +27,13 @@ class LatestSimpleUDP : SimpleUDP {
     }
 
     public func start() {
-        NSLog("ServiceDiscovery::iOS 14, listening udp");
+        NSLog("ServiceDiscovery::listening udp");
 
         let endpoint = NWEndpoint.hostPort(host: NWEndpoint.Host(UdpMulticastGroup),
                                            port: NWEndpoint.Port(rawValue: UInt16(UdpPort))!)
         DispatchQueue.global(qos: .background).async {
             guard let multicast = try? NWMulticastGroup(for: [endpoint]) else {
-                NSLog("ServiceDiscovery: error creating group")
+                NSLog("ServiceDiscovery::error creating group (FATAL)")
                 return
             }
 
@@ -44,14 +44,14 @@ class LatestSimpleUDP : SimpleUDP {
                     case .hostPort(let host, _):
                         address = "\(host)"
                     default:
-                        NSLog("ServiceDiscovery: unexpected remote on udp")
+                        NSLog("ServiceDiscovery::unexpected remote on udp")
                         return
                 }
 
-                NSLog("ServiceDiscovery: received \(address)")
+                NSLog("ServiceDiscovery::received \(address)")
 
                 guard let data = content?.base64EncodedString() else {
-                    NSLog("ServiceDiscovery: no data")
+                    NSLog("ServiceDiscovery::no data")
                     return
                 }
 
@@ -62,14 +62,14 @@ class LatestSimpleUDP : SimpleUDP {
             }
 
             group.stateUpdateHandler = { (newState) in
-                NSLog("ServiceDiscovery: group entered state \(String(describing: newState))")
+                NSLog("ServiceDiscovery::group entered state \(String(describing: newState))")
             }
 
             group.start(queue: .main)
 
             self.group = group
 
-            NSLog("ServiceDiscovery: simple udp running")
+            NSLog("ServiceDiscovery::udp running")
         }
     }
 
@@ -77,6 +77,7 @@ class LatestSimpleUDP : SimpleUDP {
         guard let g = self.group else { return }
         g.cancel()
         self.group = nil
+        NSLog("ServiceDiscovery::stopped")
     }
 }
 
@@ -98,8 +99,7 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
 
     @objc
     public func start(serviceTypeSearch: String, serviceNameSelf: String?, serviceTypeSelf: String?) {
-        NSLog("ServiceDiscovery::starting");
-        NSLog(serviceTypeSearch);
+        NSLog("ServiceDiscovery::starting: %@", serviceTypeSearch);
         pending = nil
         browser.delegate = self
         browser.stop()
@@ -109,22 +109,29 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
         UIApplication.shared.delegate = appDelegate
 
         if ourselves == nil && serviceNameSelf != nil && serviceTypeSelf != nil {
-            NSLog("ServiceDiscovery:registering self: name=%@ type=%@", serviceNameSelf!, serviceTypeSelf!)
+            NSLog("ServiceDiscovery::registering self: name=%@ type=%@", serviceNameSelf!, serviceTypeSelf!)
             ourselves = NetService(domain: DefaultLocalDomain, type: serviceTypeSelf!, name: serviceNameSelf!, port: Int32(UdpPort))
             ourselves!.delegate = self
             ourselves!.publish()
         }
         else {
-            NSLog("ServiceDiscovery:NOT registering self")
+            NSLog("ServiceDiscovery::NOT registering self")
         }
 
         if #available(iOS 14.00, *) {
             if simple == nil {
+                NSLog("ServiceDiscovery::starting udp")
                 simple = LatestSimpleUDP(networkingListener: self.networkingListener)
                 simple?.start()
             }
+            else {
+                NSLog("ServiceDiscovery::udp already running")
         }
     }
+        else {
+            NSLog("ServiceDiscovery:udp unavailable")
+        }
+        }
 
     @objc
     public func stop() {
@@ -136,6 +143,7 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
                 simple = nil
             }
         }
+        NSLog("ServiceDiscovery::stopped")
         networkingListener.onStopped()
     }
 
@@ -160,11 +168,11 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
         NSLog("ServiceDiscovery::netServiceDidResolveAddress %@ %@", sender.name, sender.hostName ?? "<none>");
 
         if let serviceIp = resolveIPv4(addresses: sender.addresses!) {
-            NSLog("Found IPV4: %@", serviceIp)
+            NSLog("ServiceDiscovery::Found IPV4: %@", serviceIp)
             networkingListener.onFoundService(service: ServiceInfo(type: sender.type, name: sender.name, host: serviceIp, port: sender.port))
         }
         else {
-            NSLog("No ipv4")
+            NSLog("ServiceDiscovery::No ipv4")
         }
     }
 
