@@ -2,11 +2,11 @@ import Foundation
 
 public final class TemporaryFile {
     public let url: URL
-
+    
     public init(beside besides: String, extension ext: String) {
         let besidesUrl = URL(fileURLWithPath: besides)
         let directory = besidesUrl.deletingLastPathComponent()
-
+        
         url = directory
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension(ext)
@@ -18,10 +18,10 @@ public final class TemporaryFile {
             try? FileManager.default.removeItem(at: url)
         }
     }
-
+    
     deinit {
         /*
-        remove()
-        */
+         remove()
+         */
     }
 }

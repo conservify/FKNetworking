@@ -48,7 +48,7 @@ open class PbFile : NSObject {
             var position: UInt64 = 0
             
             NSLog("[%@] starting", token)
-
+            
             do {
                 let fm = FileManager()
                 let attr = try fm.attributesOfItem(atPath: self.path)
@@ -77,11 +77,11 @@ open class PbFile : NSObject {
                                 bytesRead = stream.read(pointer, maxLength: Int(length))
                             }
                         }
-
+                        
                         if bytesRead != length {
                             if bytesRead == -1 {
                                 if let streamError = stream.streamError {
-                                throw streamError
+                                    throw streamError
                                 }
                                 throw BinaryDelimited.Error.unknownStreamError
                             }
@@ -108,7 +108,7 @@ open class PbFile : NSObject {
                         listener.onFileRecords(path: self.path, token: token, position: position, size: size, records: records)
                         records = []
                     }
-
+                    
                     listener.onFileRecords(path: self.path, token: token, position: position, size: size, records: nil)
                     
                     stream.close()
@@ -129,11 +129,11 @@ open class PbFile : NSObject {
         var totalBytesRead = 0
         let readBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: 1)
         #if swift(>=4.1)
-            defer { readBuffer.deallocate() }
+        defer { readBuffer.deallocate() }
         #else
-            defer { readBuffer.deallocate(capacity: 1) }
+        defer { readBuffer.deallocate(capacity: 1) }
         #endif
-
+        
         func nextByte() throws -> UInt8 {
             let bytesRead = stream.read(readBuffer, maxLength: 1)
             if bytesRead != 1 {
@@ -148,7 +148,7 @@ open class PbFile : NSObject {
             totalBytesRead += 1
             return readBuffer[0]
         }
-
+        
         var value: UInt64 = 0
         var shift: UInt64 = 0
         while true {

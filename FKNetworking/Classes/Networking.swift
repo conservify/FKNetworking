@@ -1,10 +1,3 @@
-//
-//  Networking.swift
-//  FKNetworking
-//
-//  Created by Jacob Lewallen on 10/25/19.
-//
-
 import Foundation
 import Network
 import os
