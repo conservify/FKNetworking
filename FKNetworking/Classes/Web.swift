@@ -21,7 +21,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
     public init(uploadListener: WebTransferListener, downloadListener: WebTransferListener) {
         self.uploadListener = uploadListener
         self.downloadListener = downloadListener
-
+        
         sessionConfig = URLSessionConfiguration.background(withIdentifier: sessionId)
         sessionConfig.isDiscretionary = false
         sessionConfig.sessionSendsLaunchEvents = true
@@ -33,7 +33,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
         sessionConfig.timeoutIntervalForRequest = 10
         
         super.init()
-
+        
         urlSession = URLSession(configuration: sessionConfig, delegate: self, delegateQueue: nil)
     }
     
@@ -59,7 +59,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
         for (key, value) in info.headers {
             req.addValue(value, forHTTPHeaderField: key)
         }
-
+        
         if info.body != nil {
             if info.isGET {
                 NSLog("[%@] WARNING: ignoring body for GET", id)
@@ -81,10 +81,10 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
             sessionConfig.timeoutIntervalForResource = 10
         }
         sessionConfig.timeoutIntervalForRequest = 10
-
+        
         let task = URLSession(configuration: sessionConfig).dataTask(with: req) { (data, response, error) in
             NSLog("[%@] completed", id)
-
+            
             if error != nil {
                 NSLog("Web::error: %@", error!.localizedDescription)
                 self.downloadListener.onError(taskId: id, message: error!.localizedDescription)
@@ -92,7 +92,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
             else {
                 if let httpResponse = response as? HTTPURLResponse {
                     guard let data = data else { return }
-
+                    
                     NSLog("Web::data: %@", data.debugDescription)
                     
                     var body: String?
@@ -125,7 +125,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
         idToTask[id] = task
         
         task.resume()
-
+        
         return id
     }
     
@@ -140,7 +140,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
             temp.remove()
             temps[id] = nil
         }
-
+        
     }
     
     @objc
@@ -151,7 +151,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
     @objc
     public func download(info: WebTransfer) -> String {
         let id = info.id
-
+        
         NSLog("[%@] downloading %@", id, info.url!)
         
         guard let url = URL(string: info.url!) else {
@@ -159,7 +159,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
             downloadListener.onError(taskId: id, message: "invalid url")
             return id
         }
-
+        
         var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData/*, timeoutInterval: 10*/)
         req.httpMethod = info.methodOrDefault
         
@@ -171,7 +171,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
         // task.earliestBeginDate = Date().addingTimeInterval(60 * 60)
         // task.countOfBytesClientExpectsToSend = 200
         // task.countOfBytesClientExpectsToReceive = 500 * 1024
-
+        
         received[id] = Data()
         transfers[id] = info
         taskToId[task] = id
@@ -196,7 +196,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
         }
         
         NSLog("[%@] transfer completed", taskId)
-
+        
         let listener = getListenerFor(task: task)
         let taskInfo = transfers[taskId]!
         
@@ -235,7 +235,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
                 listener.onError(taskId: taskId, message: error!.localizedDescription)
             }
         }
-
+        
         cleanup(id: taskId)
     }
     
@@ -254,8 +254,8 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
         if -lastProgress.timeIntervalSinceNow > minimumDelay || totalBytesWritten == totalBytesExpectedToWrite {
             OperationQueue.main.addOperation {
                 self.downloadListener.onProgress(taskId: taskId, headers: headers,
-                                             bytes: Int(totalBytesWritten),
-                                             total: Int(totalBytesExpectedToWrite))
+                                                 bytes: Int(totalBytesWritten),
+                                                 total: Int(totalBytesExpectedToWrite))
             }
             lastProgress = Date()
         }
@@ -268,7 +268,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
         }
         
         let taskInfo = transfers[taskId]!
-
+        
         NSLog("[%@] download completed: %@", taskId, taskInfo.path!)
         
         do {
@@ -289,7 +289,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
         }
         catch let error {
             NSLog("[%@] error %@", taskId, error.localizedDescription)
-        
+            
             OperationQueue.main.addOperation {
                 self.downloadListener.onError(taskId: taskId, message: error.localizedDescription)
             }
@@ -299,7 +299,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
     @objc
     public func upload(info: WebTransfer) -> String {
         let id = info.id
-                
+        
         NSLog("[%@] uploading %@", id, info.url!)
         
         guard let url = URL(string: info.url!) else {
@@ -324,7 +324,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
         else {
             NSLog("[%@] file ready %@", id, info.path!)
         }
-
+        
         var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData/*, timeoutInterval: 10*/)
         req.httpMethod = info.methodOrDefault
         
@@ -348,17 +348,17 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
     }
     
     public func urlSession(_ session: URLSession,
-                    task: URLSessionTask,
-                    didSendBodyData bytesSent: Int64,
-                    totalBytesSent: Int64,
-                    totalBytesExpectedToSend: Int64) {
+                           task: URLSessionTask,
+                           didSendBodyData bytesSent: Int64,
+                           totalBytesSent: Int64,
+                           totalBytesExpectedToSend: Int64) {
         NSLog("Web::upload progress: wrote=%d total=%d lp=%f", totalBytesSent, totalBytesExpectedToSend, lastProgress.timeIntervalSinceNow)
         
         guard let taskId = taskToId[task] else {
             NSLog("Web::upload progress for unknown task?")
             return
         }
-
+        
         let headers = [String: String]()
         
         if -lastProgress.timeIntervalSinceNow > minimumDelay || totalBytesSent == totalBytesExpectedToSend {
@@ -388,7 +388,7 @@ open class Web : NSObject, URLSessionDelegate, URLSessionDownloadDelegate, URLSe
         NSLog("Web::urlSessionDidFinishEvents")
         DispatchQueue.main.async {
             guard let appDelegate = UIApplication.shared.delegate as? AppDelegate,
-            let backgroundCompletionHandler = appDelegate.backgroundCompletionHandler else {
+                  let backgroundCompletionHandler = appDelegate.backgroundCompletionHandler else {
                 NSLog("Web::urlSessionDidFinishEvents: no handler")
                 return
             }

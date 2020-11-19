@@ -8,11 +8,11 @@ class MulticastUDP : SimpleListener {
     private var group: NWConnectionGroup?;
     private var monitor: NWPathMonitor?
     private var pending: DispatchGroup?
-
+    
     init(networkingListener: NetworkingListener) {
         self.networkingListener = networkingListener
     }
-
+    
     public func start(lock: DispatchGroup) {
         NSLog("ServiceDiscovery::monitor starting")
         
@@ -28,7 +28,7 @@ class MulticastUDP : SimpleListener {
         }
         
         self.monitor?.start(queue: .main)
-
+        
         NSLog("ServiceDiscovery::udp group starting");
         
         lock.enter()
@@ -48,24 +48,24 @@ class MulticastUDP : SimpleListener {
             let group = NWConnectionGroup(with: multicast, using: .udp)
             
             group.stateUpdateHandler = self.stateChange
-
+            
             group.setReceiveHandler(maximumMessageSize: 1024, rejectOversizedMessages: true) { (message, content, isComplete) in
                 var address = ""
                 switch(message.remoteEndpoint) {
-                    case .hostPort(let host, _):
-                        address = "\(host)"
-                    default:
-                        NSLog("ServiceDiscovery::udp msg unexpected remote")
-                        return
+                case .hostPort(let host, _):
+                    address = "\(host)"
+                default:
+                    NSLog("ServiceDiscovery::udp msg unexpected remote")
+                    return
                 }
-
+                
                 NSLog("ServiceDiscovery::udp msg received \(address)")
-
+                
                 guard let data = content?.base64EncodedString() else {
                     NSLog("ServiceDiscovery::udp msg empty")
                     return
                 }
-
+                
                 DispatchQueue.main.async {
                     let message = UdpMessage(address: address, data: data)
                     self.networkingListener.onUdpMessage(message: message)
@@ -73,9 +73,9 @@ class MulticastUDP : SimpleListener {
             }
             
             self.group = group
-
+            
             group.start(queue: .main)
-
+            
             NSLog("ServiceDiscovery::udp group started")
         }
     }
