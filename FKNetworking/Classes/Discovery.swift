@@ -8,6 +8,7 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
     private var browser: NetServiceBrowser
     private var appDelegate: AppDelegate
     private var pending: NetService?
+    private var searching: Bool = false
     private var udpGroup: SimpleListener?
     private var ourselves: NetService?
     
@@ -46,6 +47,7 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
             browser.delegate = self
             browser.stop()
             browser.searchForServices(ofType: name, inDomain: DefaultLocalDomain)
+            searching = true
         }
         
         if let nameSelf = options.serviceNameSelf,
@@ -96,10 +98,15 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
         stoppingLock = DispatchGroup()
         
         if options.mdns {
-            // We call this no matter what, now even if we never registered.
-            NSLog("ServiceDiscovery::searching stopping")
-            stoppingLock?.enter()
-            browser.stop()
+            if (searching) {
+                NSLog("ServiceDiscovery::searching stop")
+                searching = false
+                stoppingLock?.enter()
+                browser.stop()
+            }
+            else {
+                NSLog("ServiceDiscovery::searching already stopped")
+            }
             
             // This is optional.
             if ourselves != nil {
