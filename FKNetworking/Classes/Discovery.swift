@@ -4,25 +4,37 @@ import SystemConfiguration
 
 @objc
 open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
-    var networkingListener: NetworkingListener
-    var browser: NetServiceBrowser
-    var pending: NetService?
-    var udpGroup: SimpleListener?
-    var ourselves: NetService?
-    var appDelegate: AppDelegate
+    private var networkingListener: NetworkingListener
+    private var browser: NetServiceBrowser
+    private var appDelegate: AppDelegate
+    private var pending: NetService?
+    private var udpGroup: SimpleListener?
+    private var ourselves: NetService?
+    
+    private var lock: NSLock
+    private var startingLock: DispatchGroup?
+    private var stoppingLock: DispatchGroup?
 
     @objc
     init(networkingListener: NetworkingListener) {
         self.networkingListener = networkingListener
         self.browser = NetServiceBrowser()
         self.appDelegate = AppDelegate()
-        UIApplication.shared.delegate = appDelegate
+        self.lock = NSLock()
         super.init()
+        
+        UIApplication.shared.delegate = appDelegate
     }
 
     @objc
     public func start(options: DiscoveryStartOptions) {
+        NSLog("ServiceDiscovery::starting (acquire)");
+
+        lock.lock()
+        
         NSLog("ServiceDiscovery::starting");
+
+        startingLock = DispatchGroup()
         
         // Clear any pending resolve. Allows them to be freed, as well.
         pending = nil
@@ -30,6 +42,7 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
         // If given a type to search for, start listening.
         if let name = options.serviceTypeSearch {
             NSLog("ServiceDiscovery::searching %@", name);
+            startingLock?.enter()
             browser.delegate = self
             browser.stop()
             browser.searchForServices(ofType: name, inDomain: DefaultLocalDomain)
@@ -39,6 +52,7 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
            let typeSelf = options.serviceTypeSelf {
             if ourselves == nil {
                 NSLog("ServiceDiscovery::publishing self: name=%@ type=%@", nameSelf, typeSelf)
+                startingLock?.enter()
                 ourselves = NetService(domain: DefaultLocalDomain, type: typeSelf, name: nameSelf, port: Int32(UdpPort))
                 ourselves!.delegate = self
                 ourselves!.publish()
@@ -53,9 +67,8 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
 
         if #available(iOS 14.00, *) {
             if udpGroup == nil {
-                NSLog("ServiceDiscovery::udp starting")
                 udpGroup = MulticastUDP(networkingListener: self.networkingListener)
-                udpGroup?.start()
+                udpGroup?.start(lock: startingLock!)
             }
             else {
                 NSLog("ServiceDiscovery::udp already running")
@@ -65,26 +78,38 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
             NSLog("ServiceDiscovery:udp unavailable")
         }
         
-        NSLog("ServiceDiscovery::started");
+        startingLock?.notify(queue: .main) {
+            NSLog("ServiceDiscovery::started")
+            self.networkingListener.onStarted()
+            self.lock.unlock()
+        }
     }
 
     @objc
     public func stop(options: DiscoveryStopOptions) {
+        NSLog("ServiceDiscovery::stopping (acquire)");
+
+        lock.lock()
+        
         NSLog("ServiceDiscovery::stopping")
+        
+        stoppingLock = DispatchGroup()
         
         if options.mdns {
             // We call this no matter what, now even if we never registered.
-            NSLog("ServiceDiscovery(stop)::searching stopping")
+            NSLog("ServiceDiscovery::searching stopping")
+            stoppingLock?.enter()
             browser.stop()
             
             // This is optional.
             if ourselves != nil {
-                NSLog("ServiceDiscovery(stop)::publishing stop")
+                stoppingLock?.enter()
+                NSLog("ServiceDiscovery::publishing stop")
                 ourselves?.stop()
                 ourselves = nil
             }
             else {
-                NSLog("ServiceDiscovery(stop)::publishing disabled")
+                NSLog("ServiceDiscovery::publishing already stopped")
             }
         }
         
@@ -92,35 +117,42 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
             if #available(iOS 14.00, *) {
                 if udpGroup != nil {
                     if !options.suspending {
-                        NSLog("ServiceDiscovery(stop)::udp stopping")
-                        udpGroup?.stop()
+                        udpGroup?.stop(lock: stoppingLock!)
                         udpGroup = nil
                     }
                     else {
-                        NSLog("ServiceDiscovery(stop)::udp staying running")
+                        NSLog("ServiceDiscovery::udp staying running")
                     }
+                }
+                else {
+                    NSLog("ServiceDiscovery::udp already stopped")
                 }
             }
             else {
-                NSLog("ServiceDiscovery(stop)::udp unavailable")
+                NSLog("ServiceDiscovery::udp unavailable")
             }
         }
 
-        NSLog("ServiceDiscovery::stopped")
-        networkingListener.onStopped()
-    }
-
-    public func netService(_ sender: NetService, didNotPublish errorDict: [String : NSNumber]) {
-        NSLog("ServiceDiscovery::didNotPublish: %@", sender.name)
-        NSLog("ServiceDiscovery::didNotPublish: %@", errorDict)
+        stoppingLock?.notify(queue: .main) {
+            NSLog("ServiceDiscovery::stopped")
+            self.networkingListener.onStopped()
+            self.lock.unlock()
+        }
     }
 
     public func netServiceWillPublish(_ sender: NetService) {
         NSLog("ServiceDiscovery::netServiceWillPublish");
     }
 
+    public func netService(_ sender: NetService, didNotPublish errorDict: [String : NSNumber]) {
+        NSLog("ServiceDiscovery::didNotPublish: %@", sender.name)
+        NSLog("ServiceDiscovery::didNotPublish: %@", errorDict)
+        startingLock?.leave() // TODO Indicate error?
+    }
+
     public func netServiceDidPublish(_ sender: NetService) {
         NSLog("ServiceDiscovery::netServiceDidPublish");
+        startingLock?.leave()
     }
 
     public func netServiceWillResolve(_ sender: NetService) {
@@ -131,11 +163,11 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
         NSLog("ServiceDiscovery::netServiceDidResolveAddress %@ %@", sender.name, sender.hostName ?? "<none>");
 
         if let serviceIp = resolveIPv4(addresses: sender.addresses!) {
-            NSLog("ServiceDiscovery::Found IPV4: %@", serviceIp)
+            NSLog("ServiceDiscovery::found IPV4: %@", serviceIp)
             networkingListener.onFoundService(service: ServiceInfo(type: sender.type, name: sender.name, host: serviceIp, port: sender.port))
         }
         else {
-            NSLog("ServiceDiscovery::No ipv4")
+            NSLog("ServiceDiscovery::no ipv4")
         }
     }
 
@@ -145,11 +177,12 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
 
     public func netServiceBrowserWillSearch(_ browser: NetServiceBrowser) {
         NSLog("ServiceDiscovery::willSearch")
-        networkingListener.onStarted()
+        self.startingLock?.leave()
     }
 
     public func netServiceBrowserDidStopSearch(_ browser: NetServiceBrowser) {
         NSLog("ServiceDiscovery::netServiceBrowserDidStopSearch");
+        self.stoppingLock?.leave()
     }
 
     public func netServiceBrowser(_ browser: NetServiceBrowser, didNotSearch errorDict: [String : NSNumber]) {
@@ -157,6 +190,7 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
         for (key, code) in errorDict {
             NSLog("ServiceDiscovery::didNotSearch(Errors): %@ = %@", key, code);
         }
+        // TODO Consolidate failure with didNotPublish
         networkingListener.onDiscoveryFailed()
     }
 

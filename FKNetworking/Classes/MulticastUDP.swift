@@ -7,16 +7,16 @@ class MulticastUDP : SimpleListener {
     private var networkingListener: NetworkingListener
     private var group: NWConnectionGroup?;
     private var monitor: NWPathMonitor?
+    private var pending: DispatchGroup?
 
     init(networkingListener: NetworkingListener) {
         self.networkingListener = networkingListener
     }
 
-    public func start() {
+    public func start(lock: DispatchGroup) {
         NSLog("ServiceDiscovery::monitor starting")
         
         monitor = NWPathMonitor()
-
         monitor?.pathUpdateHandler = { path in
             NSLog("ServiceDiscovery::path-updated: \(String(describing: path))")
             
@@ -29,32 +29,40 @@ class MulticastUDP : SimpleListener {
         
         self.monitor?.start(queue: .main)
 
-        NSLog("ServiceDiscovery::udp starting");
+        NSLog("ServiceDiscovery::udp group starting");
+        
+        lock.enter()
+        
+        pending = lock
         
         DispatchQueue.global(qos: .background).async {
             let endpoint = NWEndpoint.hostPort(host: NWEndpoint.Host(UdpMulticastGroup),
                                                port: NWEndpoint.Port(rawValue: UInt16(UdpPort))!)
             
             guard let multicast = try? NWMulticastGroup(for: [endpoint]) else {
-                NSLog("ServiceDiscovery::udp error creating group (FATAL)")
+                NSLog("ServiceDiscovery::udp group error creating (FATAL)")
+                lock.leave()
                 return
             }
             
             let group = NWConnectionGroup(with: multicast, using: .udp)
+            
+            group.stateUpdateHandler = self.stateChange
+
             group.setReceiveHandler(maximumMessageSize: 1024, rejectOversizedMessages: true) { (message, content, isComplete) in
                 var address = ""
                 switch(message.remoteEndpoint) {
                     case .hostPort(let host, _):
                         address = "\(host)"
                     default:
-                        NSLog("ServiceDiscovery::udp unexpected remote")
+                        NSLog("ServiceDiscovery::udp msg unexpected remote")
                         return
                 }
 
-                NSLog("ServiceDiscovery::udp received \(address)")
+                NSLog("ServiceDiscovery::udp msg received \(address)")
 
                 guard let data = content?.base64EncodedString() else {
-                    NSLog("ServiceDiscovery::udp empty")
+                    NSLog("ServiceDiscovery::udp msg empty")
                     return
                 }
 
@@ -63,29 +71,59 @@ class MulticastUDP : SimpleListener {
                     self.networkingListener.onUdpMessage(message: message)
                 }
             }
-
-            group.stateUpdateHandler = { (newState) in
-                NSLog("ServiceDiscovery::udp group entered state \(String(describing: newState))")
-            }
             
             self.group = group
 
             group.start(queue: .main)
 
-            NSLog("ServiceDiscovery::udp running")
+            NSLog("ServiceDiscovery::udp group started")
         }
     }
-
-    public func stop() {
-        NSLog("ServiceDiscovery::stopping")
-        if monitor != nil {
-            monitor?.cancel()
+    
+    public func stop(lock: DispatchGroup) {
+        if let m = self.monitor {
+            NSLog("ServiceDiscovery::monitor stopping")
+            m.cancel()
             monitor = nil
         }
-        guard let g = self.group else { return }
-        g.cancel()
-        self.group = nil
-        NSLog("ServiceDiscovery::stopped")
+        else {
+            NSLog("ServiceDiscovery::monitor already stopped")
+        }
+        
+        if let g = self.group {
+            NSLog("ServiceDiscovery::udp group stopping")
+            
+            lock.enter()
+            
+            pending = lock
+            
+            g.cancel()
+            self.group = nil
+        }
+        else {
+            NSLog("ServiceDiscovery::udp group was stopped")
+        }
+    }
+    
+    private func stateChange(newState: NWConnectionGroup.State) {
+        NSLog("ServiceDiscovery::udp group entered state \(String(describing: newState))")
+        
+        switch newState {
+        case .cancelled:
+            if let l = pending {
+                l.leave()
+            }
+        case .failed:
+            if let l = pending {
+                l.leave()
+            }
+        case .ready:
+            if let l = pending {
+                l.leave()
+            }
+        default:
+            break
+        }
     }
 }
 
