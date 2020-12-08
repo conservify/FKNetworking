@@ -17,6 +17,7 @@ open class WebTransfer : NSObject {
     @objc public var uploadCopy: Bool = false
     @objc public var base64DecodeRequestBody: Bool = false
     @objc public var base64EncodeResponseBody: Bool = false
+    @objc public var favorLocal: Bool = false
     @objc public var contentType: String? = nil
     @objc public var headers: [String: String] = [String:String]()
     
