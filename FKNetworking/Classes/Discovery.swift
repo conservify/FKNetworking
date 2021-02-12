@@ -29,6 +29,12 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
     
     @objc
     public func start(options: DiscoveryStartOptions) {
+        DispatchQueue.global(qos: .background).async {
+            self.startSync(options: options);
+        }
+    }
+
+    private func startSync(options: DiscoveryStartOptions) {
         NSLog("ServiceDiscovery::starting (acquire)");
         
         lock.lock()
@@ -86,9 +92,15 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
             self.lock.unlock()
         }
     }
-    
+
     @objc
     public func stop(options: DiscoveryStopOptions) {
+        DispatchQueue.global(qos: .background).async {
+            self.stopSync(options: options);
+        }
+    }
+    
+    private func stopSync(options: DiscoveryStopOptions) {
         NSLog("ServiceDiscovery::stopping (acquire)");
         
         lock.lock()
