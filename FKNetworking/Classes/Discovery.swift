@@ -88,6 +88,7 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
         
         startingLock?.notify(queue: .main) {
             NSLog("ServiceDiscovery::started")
+            self.startingLock = nil
             self.networkingListener.onStarted()
             self.lock.unlock()
         }
@@ -154,6 +155,7 @@ open class ServiceDiscovery : NSObject, NetServiceBrowserDelegate, NetServiceDel
         
         stoppingLock?.notify(queue: .main) {
             NSLog("ServiceDiscovery::stopped")
+            self.stoppingLock = nil
             self.networkingListener.onStopped()
             self.lock.unlock()
         }
